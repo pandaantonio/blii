@@ -1,6 +1,9 @@
-import * as admin from "firebase-admin";
+// lib/firebaseAdmin.ts
+import { initializeApp, cert, getApps } from "firebase-admin/app";
+import { getDatabase } from "firebase-admin/database";
+import { getAuth } from "firebase-admin/auth";
 
-if (!admin.apps.length) {
+if (!getApps().length) {
   try {
     const privateKey = process.env.FIREBASE_PRIVATE_KEY
       ?.replace(/\\n/g, "\n")
@@ -10,8 +13,8 @@ if (!admin.apps.length) {
       throw new Error("FIREBASE_PRIVATE_KEY não encontrada no .env");
     }
 
-    admin.initializeApp({
-      credential: admin.credential.cert({
+    initializeApp({
+      credential: cert({
         projectId: process.env.FIREBASE_PROJECT_ID,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
         privateKey,
@@ -26,6 +29,5 @@ if (!admin.apps.length) {
   }
 }
 
-export const adminDb = admin.database();
-export const adminAuth = admin.auth();
-export default admin;
+export const adminDb = getDatabase();
+export const adminAuth = getAuth();

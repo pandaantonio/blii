@@ -1031,11 +1031,11 @@ export default function ServerContent({ serverId }: ServerContentProps) {
               {isOwner && (
                 <button
                   type="button"
-                  className="flex items-center justify-center w-8 h-8 bg-transparent border-none rounded-[8px] text-[#7a6a9a] text-sm cursor-pointer transition-all duration-200 hover:bg-[rgba(255,255,255,0.04)] hover:text-[#f0ebff]"
-                  onClick={() => setShowServerSettings(true)}
-                  title="Configurações"
+                  className="flex items-center justify-center w-8 h-8 bg-transparent border-none rounded-[8px] text-[#7a6a9a] text-sm cursor-pointer transition-all duration-200 hover:bg-[rgba(255,255,255,0.04)] hover:text-[#f0ebff] hover:scale-110"
+                  onClick={() => setShowChannelModal(true)}
+                  title="Criar canal"
                 >
-                  <FaCrown />
+                  <FaPlus />
                 </button>
               )}
             </div>
@@ -1157,23 +1157,10 @@ export default function ServerContent({ serverId }: ServerContentProps) {
               {channels.filter(c => c.type === "text" || c.type === "read").length === 0 && (
                 <div className="text-center py-8 px-4">
                   <p className="text-sm text-[#b8a8d9] m-0">Nenhum canal ainda</p>
-                  <span className="text-xs text-[#7a6a9a]">{isOwner ? "Clique em + para criar" : "Aguardando o dono criar canais"}</span>
+                  <span className="text-xs text-[#7a6a9a]">{isOwner ? "Clique no + para criar" : "Aguardando o dono criar canais"}</span>
                 </div>
               )}
             </div>
-
-            {/* Create Channel Button */}
-            {isOwner && (
-              <div className="flex-shrink-0 p-2 border-t border-[rgba(255,255,255,0.04)]">
-                <button
-                  type="button"
-                  className="flex items-center justify-center gap-2 w-full py-2.5 bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.06)] rounded-[10px] text-[#f0ebff] text-sm font-semibold font-inherit cursor-pointer transition-all duration-200 hover:bg-[rgba(255,255,255,0.08)] hover:border-[rgba(167,139,250,0.3)]"
-                  onClick={() => setShowChannelModal(true)}
-                >
-                  <FaPlus /> Criar canal
-                </button>
-              </div>
-            )}
           </aside>
 
           {/* Main Area */}

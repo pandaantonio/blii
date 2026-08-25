@@ -2,10 +2,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { auth, db, ref, get, update, onValue, set, remove, push } from "@/lib/firebase";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
-import { FaUserPlus, FaSearch, FaTimes, FaCheck, FaClock, FaComment, FaCircle } from "react-icons/fa";
+import { FaUserPlus, FaSearch, FaTimes, FaCheck, FaClock, FaComment, FaCircle, FaChevronLeft, FaUser } from "react-icons/fa";
 import Sidebar from "@/components/Sidebar";
 import DMList from "@/components/DMList";
 import DMConversation from "./DMConversation";
@@ -43,6 +43,7 @@ interface AppUser {
 
 export default function DMContent() {
   const router = useRouter();
+  const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<AppUser | null>(null);
   const [username, setUsername] = useState("");
@@ -66,11 +67,46 @@ export default function DMContent() {
   const [selectedPeer, setSelectedPeer] = useState<Peer | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
 
+  // Verifica se há um userId na URL para abrir conversa diretamente
+  useEffect(() => {
+    if (!mounted || !user || !pathname) return;
+    
+    const segments = pathname.split("/");
+    const userId = segments[2];
+    
+    if (userId && !selectedPeer) {
+      const fetchUser = async () => {
+        const userRef = ref(db, `users/${userId}`);
+        const userSnap = await get(userRef);
+        if (userSnap.exists()) {
+          const userData = userSnap.val();
+          setSelectedPeer({
+            userId: userId,
+            username: userData.username || "Usuário",
+            displayName: userData.displayName || userData.username || "Usuário",
+            photoURL: userData.photoURL || null,
+            dmId: null,
+          });
+        }
+      };
+      fetchUser();
+    }
+  }, [mounted, user, pathname, selectedPeer]);
+
+  // Atualiza a URL quando seleciona um peer
+  useEffect(() => {
+    if (!mounted || !selectedPeer) return;
+    const newPath = `/dm/${selectedPeer.userId}`;
+    if (pathname !== newPath) {
+      router.push(newPath, { scroll: false });
+    }
+  }, [mounted, selectedPeer, router, pathname]);
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Auth - corrigido
+  // Auth
   useEffect(() => {
     if (!mounted) return;
 
@@ -234,6 +270,11 @@ export default function DMContent() {
 
   const handleSelectConversation = (peer: Peer) => {
     setSelectedPeer(peer);
+  };
+
+  const handleBackToList = () => {
+    setSelectedPeer(null);
+    router.push("/dm", { scroll: false });
   };
 
   // Search user
@@ -447,25 +488,13 @@ export default function DMContent() {
     }
   };
 
-  if (!mounted || loading) {
+  if (!mounted || loading || !user) {
     return (
       <>
         <Sidebar />
-        <div className="min-h-screen min-h-dvh flex flex-col items-center justify-center gap-4 text-[#b8a8d9] text-sm ml-[68px] w-[calc(100%-68px)]">
+        <div className="min-h-screen min-h-dvh flex flex-col items-center justify-center gap-4 text-[#b8a8d9] text-sm pl-[64px] transition-all duration-300">
           <div className="w-10 h-10 border-3 border-white/6 border-t-[#a78bfa] rounded-full animate-spin" />
           <p>Carregando...</p>
-        </div>
-      </>
-    );
-  }
-
-  // Se não tiver usuário, não renderiza o resto
-  if (!user) {
-    return (
-      <>
-        <Sidebar />
-        <div className="min-h-screen min-h-dvh flex items-center justify-center ml-[68px] w-[calc(100%-68px)]">
-          <p className="text-[#b8a8d9]">Usuário não autenticado</p>
         </div>
       </>
     );
@@ -474,7 +503,7 @@ export default function DMContent() {
   return (
     <>
       <Sidebar />
-      <div className="min-h-screen min-h-dvh relative overflow-hidden text-[#f0ebff] font-['Inter',system-ui,-apple-system,'Segoe_UI',Roboto,sans-serif] ml-[68px] w-[calc(100%-68px)] bg-[radial-gradient(ellipse_at_20%_20%,#1a0a2e_0%,#0a0618_50%,#2d1045_100%)] flex items-center justify-center p-5">
+      <div className="min-h-screen min-h-dvh relative overflow-hidden text-[#f0ebff] font-['Inter',system-ui,-apple-system,'Segoe_UI',Roboto,sans-serif] bg-[radial-gradient(ellipse_at_20%_20%,#1a0a2e_0%,#0a0618_50%,#2d1045_100%)] flex items-center justify-center p-5 transition-all duration-300 pl-[64px]">
         {/* Orbs decorativos */}
         <div className="fixed w-[800px] h-[800px] -top-[300px] -right-[200px] bg-[radial-gradient(circle,rgba(167,139,250,0.06)_0%,transparent_70%)] pointer-events-none z-0 blur-[80px]" aria-hidden="true" />
         <div className="fixed w-[600px] h-[600px] -bottom-[200px] -left-[200px] bg-[radial-gradient(circle,rgba(255,138,91,0.04)_0%,transparent_70%)] pointer-events-none z-0 blur-[80px]" aria-hidden="true" />
@@ -482,15 +511,14 @@ export default function DMContent() {
         {/* Container principal */}
         <div className="relative z-10 flex w-full max-w-[1400px] h-[calc(100vh-40px)] max-h-[900px] bg-white/2 backdrop-blur-[40px] border border-white/4 rounded-3xl overflow-hidden shadow-[0_32px_80px_rgba(0,0,0,0.5)]">
           
-          {/* Sidebar esquerda - Conversas */}
-          <aside className="w-[380px] min-w-[380px] h-full bg-white/2 border-r border-white/4 flex flex-col overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-6 pb-4 border-b border-white/4 flex-shrink-0">
-              <h2 className="font-['Sora','Inter',system-ui,sans-serif] text-lg font-bold text-[#f0ebff] m-0 tracking-tight">
-                Mensagens
-              </h2>
+          {/* Sidebar de conversas - compacta como a sidebar principal */}
+          <aside className={`w-[56px] min-w-[56px] h-full bg-white/2 border-r border-white/4 flex flex-col overflow-hidden transition-all duration-300 ${
+            selectedPeer ? 'hidden md:flex' : 'flex'
+          }`}>
+            {/* Header compacto */}
+            <div className="flex items-center justify-center py-3 border-b border-white/4 flex-shrink-0">
               <button
-                className="flex items-center justify-center w-9 h-9 bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] border-none rounded-[10px] text-white text-sm cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-[0_4px_16px_rgba(167,139,250,0.3)]"
+                className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] text-white text-sm cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-[0_4px_16px_rgba(167,139,250,0.3)]"
                 onClick={() => setIsModalOpen(true)}
                 title="Nova mensagem"
               >
@@ -498,49 +526,86 @@ export default function DMContent() {
               </button>
             </div>
 
-            {/* Search */}
-            <div className="relative px-6 py-4 border-b border-white/4 flex-shrink-0">
-              <FaSearch className="absolute left-[38px] top-1/2 -translate-y-1/2 text-[#7a6a9a] text-sm pointer-events-none" />
+            {/* Search compacto */}
+            <div className="relative px-2 py-2 border-b border-white/4 flex-shrink-0">
+              <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-[#7a6a9a] text-xs pointer-events-none" />
               <input
                 type="text"
-                placeholder="Pesquisar conversas..."
-                className="w-full h-10 pl-[38px] pr-4 bg-white/4 border border-white/6 rounded-[10px] text-[#f0ebff] text-sm font-inherit outline-none transition-all duration-300 placeholder:text-[#7a6a9a] focus:border-[#a78bfa] focus:bg-white/6"
+                placeholder=""
+                className="w-full h-8 pl-7 pr-2 bg-white/4 border border-white/6 rounded-[8px] text-[#f0ebff] text-xs font-inherit outline-none transition-all duration-300 placeholder:text-[#7a6a9a] focus:border-[#a78bfa] focus:bg-white/6"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                title="Pesquisar conversas"
               />
             </div>
 
-            {/* Lista de conversas */}
-            <div className="flex-1 overflow-y-auto px-3 py-2 pb-4 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[rgba(167,139,250,0.2)] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb:hover]:bg-[rgba(167,139,250,0.4)]">
-              <DMList
-                userId={user.uid}
-                friends={friends}
-                selectedUserId={selectedPeer?.userId}
-                onSelect={handleSelectConversation}
-              />
+            {/* Lista de conversas - compacta */}
+            <div className="flex-1 overflow-y-auto px-1.5 py-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[rgba(167,139,250,0.2)] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:hover:bg-[rgba(167,139,250,0.4)]">
+              <div className="flex flex-col items-center gap-1">
+                {friends.map((friend) => {
+                  const isSelected = selectedPeer?.userId === friend.id;
+                  return (
+                    <button
+                      key={friend.id}
+                      type="button"
+                      className={`relative w-11 h-11 rounded-[14px] border-none text-[#f0ebff] font-bold text-sm flex items-center justify-center cursor-pointer transition-all duration-200 flex-shrink-0 overflow-hidden hover:rounded-[12px] hover:bg-gradient-to-br hover:from-[#ff8a5b] hover:to-[#a78bfa] hover:scale-105 group ${
+                        isSelected 
+                          ? "rounded-[12px] bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa]" 
+                          : "bg-[rgba(255,255,255,0.06)]"
+                      }`}
+                      onClick={() => handleSelectConversation({
+                        userId: friend.id,
+                        username: friend.username,
+                        displayName: friend.displayName,
+                        photoURL: friend.photoURL,
+                        dmId: null,
+                      })}
+                      title={friend.displayName}
+                    >
+                      {friend.photoURL ? (
+                        <img 
+                          src={friend.photoURL} 
+                          alt={friend.displayName}
+                          className="w-full h-full object-cover rounded-[14px]"
+                        />
+                      ) : (
+                        friend.displayName?.charAt(0)?.toUpperCase() || "?"
+                      )}
+                      <span className="absolute left-[calc(100%+12px)] top-1/2 -translate-y-1/2 bg-[rgba(20,10,40,0.95)] backdrop-blur-[12px] text-[#f0ebff] px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap border border-[rgba(255,255,255,0.06)] shadow-[0_8px_24px_rgba(0,0,0,0.4)] opacity-0 pointer-events-none transition-all duration-200 z-[200] before:content-[''] before:absolute before:right-full before:top-1/2 before:-translate-y-1/2 before:border-6 before:border-transparent before:border-r-[rgba(20,10,40,0.95)] group-hover:opacity-100 group-hover:translate-y-1/2 group-hover:translate-x-1">
+                        {friend.displayName}
+                      </span>
+                      {isSelected && (
+                        <span className="absolute -left-2 top-1/2 -translate-y-1/2 w-1 h-6 bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] rounded-r-[4px]" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Painel de solicitações */}
+            {/* Solicitações pendentes - compacto */}
             {friendRequests.length > 0 && (
               <div className="border-t border-white/4 flex-shrink-0">
                 <button
-                  className="flex items-center gap-2.5 w-full px-6 py-3.5 bg-transparent border-none text-[#b8a8d9] text-sm font-medium font-inherit cursor-pointer transition-all duration-200 hover:bg-white/2"
+                  className="flex items-center justify-center w-full py-2 bg-transparent border-none text-[#b8a8d9] text-xs cursor-pointer transition-all duration-200 hover:bg-white/2 relative group"
                   onClick={() => setShowRequests(!showRequests)}
+                  title={`${friendRequests.length} solicitações`}
                 >
                   <FaClock />
-                  <span>Solicitações de amizade</span>
-                  <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 bg-[#ffcf70] text-[#201004] text-[0.65rem] font-extrabold rounded-full">
+                  <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 bg-[#ffcf70] text-[#201004] text-[0.5rem] font-extrabold rounded-full">
                     {friendRequests.length}
                   </span>
-                  <span className="text-[0.6rem] opacity-50">{showRequests ? "▲" : "▼"}</span>
+                  <span className="absolute left-[calc(100%+12px)] top-1/2 -translate-y-1/2 bg-[rgba(20,10,40,0.95)] backdrop-blur-[12px] text-[#f0ebff] px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap border border-[rgba(255,255,255,0.06)] shadow-[0_8px_24px_rgba(0,0,0,0.4)] opacity-0 pointer-events-none transition-all duration-200 z-[200] before:content-[''] before:absolute before:right-full before:top-1/2 before:-translate-y-1/2 before:border-6 before:border-transparent before:border-r-[rgba(20,10,40,0.95)] group-hover:opacity-100 group-hover:translate-y-1/2 group-hover:translate-x-1">
+                    {friendRequests.length} solicitações
+                  </span>
                 </button>
 
                 {showRequests && (
-                  <div className="px-4 pb-4 flex flex-col gap-1.5">
+                  <div className="absolute left-[56px] top-0 w-[240px] max-h-[300px] overflow-y-auto bg-[rgba(20,10,40,0.98)] backdrop-blur-xl border border-[rgba(255,255,255,0.06)] rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] p-2 z-50">
                     {friendRequests.map((request) => (
-                      <div key={request.id} className="flex items-center justify-between p-2.5 bg-white/2 rounded-[10px] transition-colors duration-200 hover:bg-white/4">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] flex items-center justify-center text-white text-xs font-bold uppercase flex-shrink-0 overflow-hidden">
+                      <div key={request.id} className="flex items-center justify-between p-2 bg-white/2 rounded-[8px] hover:bg-white/4 transition-colors duration-200 mb-1 last:mb-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] flex items-center justify-center text-white text-[0.6rem] font-bold uppercase flex-shrink-0 overflow-hidden">
                             {request.photoURL ? (
                               <img 
                                 src={request.photoURL} 
@@ -552,14 +617,14 @@ export default function DMContent() {
                               request.displayName?.charAt(0)?.toUpperCase() || "?"
                             )}
                           </div>
-                          <div className="flex flex-col">
-                            <span className="text-sm font-semibold text-[#f0ebff]">{request.displayName || "Usuário"}</span>
-                            <span className="text-[0.7rem] text-[#7a6a9a]">@{request.username || "usuário"}</span>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-xs font-semibold text-[#f0ebff] truncate block">{request.displayName}</span>
+                            <span className="text-[0.6rem] text-[#7a6a9a] truncate block">@{request.username}</span>
                           </div>
                         </div>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 flex-shrink-0">
                           <button
-                            className="flex items-center justify-center w-7 h-7 bg-[rgba(79,216,196,0.15)] border-none rounded-md text-[#4fd8c4] cursor-pointer transition-all duration-200 hover:bg-[rgba(79,216,196,0.25)] disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="flex items-center justify-center w-6 h-6 bg-[rgba(79,216,196,0.15)] border-none rounded-md text-[#4fd8c4] text-[0.6rem] cursor-pointer transition-all duration-200 hover:bg-[rgba(79,216,196,0.25)] disabled:opacity-40"
                             onClick={() => handleAcceptRequest(request.id)}
                             disabled={processingRequest === request.id}
                             title="Aceitar"
@@ -567,7 +632,7 @@ export default function DMContent() {
                             <FaCheck />
                           </button>
                           <button
-                            className="flex items-center justify-center w-7 h-7 bg-[rgba(247,84,110,0.1)] border-none rounded-md text-[#f7546e] cursor-pointer transition-all duration-200 hover:bg-[rgba(247,84,110,0.2)] disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="flex items-center justify-center w-6 h-6 bg-[rgba(247,84,110,0.1)] border-none rounded-md text-[#f7546e] text-[0.6rem] cursor-pointer transition-all duration-200 hover:bg-[rgba(247,84,110,0.2)] disabled:opacity-40"
                             onClick={() => handleRejectRequest(request.id)}
                             disabled={processingRequest === request.id}
                             title="Recusar"
@@ -581,19 +646,12 @@ export default function DMContent() {
                 )}
               </div>
             )}
-
-            {friendRequests.length === 0 && (
-              <div className="border-t border-white/4 flex-shrink-0">
-                <div className="flex items-center gap-2.5 w-full px-6 py-3.5 text-[#b8a8d9] text-sm font-medium opacity-50 cursor-default">
-                  <FaClock />
-                  <span>Nenhuma solicitação pendente</span>
-                </div>
-              </div>
-            )}
           </aside>
 
           {/* Área do chat */}
-          <main className="flex-1 flex flex-col min-w-0 bg-white/1 overflow-hidden">
+          <main className={`flex-1 flex flex-col min-w-0 bg-white/1 overflow-hidden ${
+            selectedPeer ? 'flex' : 'hidden md:flex'
+          }`}>
             {!selectedPeer ? (
               // Painel de usuários online
               <div className="w-full h-full flex flex-col overflow-hidden px-7 py-6">
@@ -685,6 +743,7 @@ export default function DMContent() {
                 username={username}
                 displayName={displayName}
                 photoURL={photoURL}
+                onBack={handleBackToList}
               />
             )}
           </main>

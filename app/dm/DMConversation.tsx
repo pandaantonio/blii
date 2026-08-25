@@ -2,9 +2,10 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { db, ref, get, update, set, remove, push } from "@/lib/firebase";
 import { query, orderByChild, limitToLast, onChildAdded } from "firebase/database";
-import { FaTrash, FaSmile, FaImage, FaUser } from "react-icons/fa";
+import { FaTrash, FaSmile, FaImage, FaUser, FaArrowLeft } from "react-icons/fa";
 import dynamic from 'next/dynamic';
 import FormattedMessage from "@/components/FormattedMessage";
 
@@ -13,7 +14,7 @@ const EmojiPicker = dynamic(
   { ssr: false }
 );
 
-interface User {
+interface AppUser {
   uid: string;
   displayName: string | null;
   email: string | null;
@@ -49,11 +50,12 @@ interface GifData {
 }
 
 interface DMConversationProps {
-  user: User;
+  user: AppUser;
   peer: Peer;
   username: string;
   displayName: string;
   photoURL: string | null;
+  onBack: () => void;
 }
 
 const GIPHY_KEY =
@@ -72,7 +74,7 @@ const buildPreviewText = (text: string): string => {
   return text;
 };
 
-export default function DMConversation({ user, peer, username, displayName, photoURL }: DMConversationProps) {
+export default function DMConversation({ user, peer, username, displayName, photoURL, onBack }: DMConversationProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -352,6 +354,13 @@ export default function DMConversation({ user, peer, username, displayName, phot
     <div className="flex-1 flex flex-col h-full max-w-none m-0">
       {/* Header */}
       <header className="flex items-center gap-3 px-4 py-3 border-b border-white/4 bg-white/2 flex-shrink-0">
+        <button
+          className="flex items-center justify-center w-8 h-8 bg-transparent border-none rounded-[8px] text-[#7a6a9a] cursor-pointer transition-all duration-200 hover:bg-[rgba(255,255,255,0.04)] hover:text-[#f0ebff] md:hidden"
+          onClick={onBack}
+          title="Voltar"
+        >
+          <FaArrowLeft />
+        </button>
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <div className="w-10 h-10 rounded-[10px] bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] flex items-center justify-center text-white font-['Sora','Inter',system-ui,sans-serif] text-base font-bold uppercase flex-shrink-0 shadow-[0_0_0_1px_rgba(255,255,255,0.04)] overflow-hidden">
             {peer.photoURL ? (
@@ -490,7 +499,6 @@ export default function DMConversation({ user, peer, username, displayName, phot
         {showGif && (
           <div className="absolute bottom-[calc(100%+8px)] left-3 right-3 max-w-[420px] max-h-[320px] bg-[#1a0c28] border border-white/6 rounded-[18px] shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex flex-col overflow-hidden z-50">
             <form className="flex items-center gap-2 p-2.5 border-b border-white/4 flex-shrink-0" onSubmit={handleGifSearch}>
-              <FaImage className="text-[#7a6a9a] text-sm flex-shrink-0" />
               <input
                 type="text"
                 placeholder="Buscar GIFs..."

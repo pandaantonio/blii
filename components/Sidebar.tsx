@@ -213,11 +213,13 @@ export default function Sidebar() {
   return (
     <>
       <nav 
-        className="fixed top-0 left-0 bottom-0 w-[68px] bg-[rgba(10,6,24,0.85)] backdrop-blur-[20px] border-r border-[rgba(255,255,255,0.06)] flex flex-col items-center py-3 z-[100] transition-all duration-300 overflow-y-auto hover:bg-[rgba(10,6,24,0.95)] [&::-webkit-scrollbar]:w-0.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[rgba(167,139,250,0.3)] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:hover:bg-[rgba(167,139,250,0.5)]"
+        className="fixed top-0 left-0 bottom-0 w-[56px] bg-[rgba(10,6,24,0.95)] backdrop-blur-[20px] border-r border-[rgba(255,255,255,0.06)] flex flex-col items-center py-3 z-[100] overflow-y-auto [&::-webkit-scrollbar]:w-0.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[rgba(167,139,250,0.3)] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:hover:bg-[rgba(167,139,250,0.5)]"
         aria-label="Menu principal"
       >
-        {/* Divisor superior - removido o logo E */}
-        <div className="w-8 h-0.5 bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] rounded-full mb-3 flex-shrink-0" />
+        {/* Logo */}
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] flex items-center justify-center text-white text-base font-extrabold font-['Sora','Inter',system-ui,sans-serif] shadow-[0_4px_16px_rgba(167,139,250,0.25)] mb-3 flex-shrink-0">
+          E
+        </div>
 
         {/* Servidores */}
         <div className="flex flex-col items-center gap-1.5 px-0 pb-1 w-full flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-0.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[rgba(167,139,250,0.3)] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:hover:bg-[rgba(167,139,250,0.5)]">
@@ -265,34 +267,11 @@ export default function Sidebar() {
               Adicionar servidor
             </span>
           </button>
-          
-          <div className="w-8 h-px bg-[rgba(255,255,255,0.1)] my-1 flex-shrink-0" />
-          
-          {pathname?.includes("/server/") && isServerOwner && (
-            <button
-              type="button"
-              className="relative w-11 h-11 rounded-[14px] bg-[rgba(255,255,255,0.06)] border border-dashed border-[rgba(255,255,255,0.2)] text-[#b8a8d9] flex items-center justify-center cursor-pointer transition-all duration-200 flex-shrink-0 hover:rounded-[12px] hover:border-solid hover:border-[#ff8a5b] hover:text-[#ff8a5b] hover:bg-[rgba(255,106,53,0.05)] hover:scale-105 group"
-              onClick={() => {
-                const segments = pathname.split("/");
-                const serverId = segments[2];
-                if (serverId) {
-                  window.dispatchEvent(
-                    new CustomEvent("openCreateChannelModal", { detail: { serverId } })
-                  );
-                }
-              }}
-              title="Criar canal"
-            >
-              <FaPlus className="text-xl transition-all duration-200" />
-              <span className="absolute left-[calc(100%+12px)] top-1/2 -translate-y-1/2 bg-[rgba(20,10,40,0.95)] backdrop-blur-[12px] text-[#f0ebff] px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap border border-[rgba(255,255,255,0.06)] shadow-[0_8px_24px_rgba(0,0,0,0.4)] opacity-0 pointer-events-none transition-all duration-200 z-[200] before:content-[''] before:absolute before:right-full before:top-1/2 before:-translate-y-1/2 before:border-6 before:border-transparent before:border-r-[rgba(20,10,40,0.95)] group-hover:opacity-100 group-hover:translate-y-1/2 group-hover:translate-x-1">
-                Criar canal
-              </span>
-            </button>
-          )}
         </div>
 
-        {/* Navegação */}
+        {/* Navegação - apenas DM e Configurações com balões */}
         <div className="flex flex-col items-center gap-1 w-full py-2 flex-shrink-0 border-t border-[rgba(255,255,255,0.06)] mt-auto">
+          {/* Balão para DM */}
           <button
             type="button"
             className={`relative flex items-center justify-center w-11 h-11 rounded-[12px] border-none text-xl cursor-pointer transition-all duration-200 p-0 hover:bg-[rgba(255,255,255,0.08)] hover:text-[#f0ebff] hover:scale-105 group ${
@@ -312,6 +291,7 @@ export default function Sidebar() {
             )}
           </button>
 
+          {/* Balão para Configurações */}
           <button
             type="button"
             className={`relative flex items-center justify-center w-11 h-11 rounded-[12px] border-none text-xl cursor-pointer transition-all duration-200 p-0 hover:bg-[rgba(255,255,255,0.08)] hover:text-[#f0ebff] hover:scale-105 group ${
@@ -334,7 +314,7 @@ export default function Sidebar() {
 
         {/* Footer */}
         <div className="w-full flex flex-col items-center gap-1.5 pt-3 flex-shrink-0 border-t border-[rgba(255,255,255,0.06)]">
-          <div className="relative w-11 h-11 rounded-full border-2 border-[rgba(167,139,250,0.2)] overflow-hidden flex-shrink-0 transition-colors duration-200 hover:border-[rgba(167,139,250,0.5)]">
+          <div className="relative w-10 h-10 rounded-full border-2 border-[rgba(167,139,250,0.2)] overflow-hidden flex-shrink-0 transition-colors duration-200 hover:border-[rgba(167,139,250,0.5)]">
             {photoURL ? (
               <img
                 src={photoURL}
@@ -345,21 +325,18 @@ export default function Sidebar() {
               />
             ) : (
               <div className="w-full h-full rounded-full bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] flex items-center justify-center text-white">
-                <FaUser className="text-[1.4rem]" />
+                <FaUser className="text-[1.2rem]" />
               </div>
             )}
           </div>
-          <span className="text-[#f0ebff] text-[0.6rem] font-semibold text-center max-w-[60px] overflow-hidden text-ellipsis whitespace-nowrap opacity-80 leading-tight">
-            {displayName}
-          </span>
 
           <button
             type="button"
-            className="relative flex items-center justify-center w-11 h-11 rounded-[12px] bg-transparent border-none text-[#7a6a9a] text-lg cursor-pointer transition-all duration-200 hover:bg-[rgba(239,68,68,0.1)] hover:text-[#f87171] hover:scale-105 group"
+            className="relative flex items-center justify-center w-10 h-10 rounded-[12px] bg-transparent border-none text-[#7a6a9a] text-base cursor-pointer transition-all duration-200 hover:bg-[rgba(239,68,68,0.1)] hover:text-[#f87171] hover:scale-105 group"
             onClick={handleLogout}
             title="Sair"
           >
-            <FaSignOutAlt className="text-lg transition-all duration-200 hover:scale-110" />
+            <FaSignOutAlt className="text-base transition-all duration-200 hover:scale-110" />
             <span className="absolute left-[calc(100%+12px)] top-1/2 -translate-y-1/2 bg-[rgba(20,10,40,0.95)] backdrop-blur-[12px] text-[#f0ebff] px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap border border-[rgba(255,255,255,0.06)] shadow-[0_8px_24px_rgba(0,0,0,0.4)] opacity-0 pointer-events-none transition-all duration-200 z-[200] before:content-[''] before:absolute before:right-full before:top-1/2 before:-translate-y-1/2 before:border-6 before:border-transparent before:border-r-[rgba(20,10,40,0.95)] group-hover:opacity-100 group-hover:translate-y-1/2 group-hover:translate-x-1">
               Sair
             </span>

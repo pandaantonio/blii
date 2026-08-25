@@ -1,6 +1,6 @@
 // app/api/check-username/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
+import { db, ref, get } from '@/lib/firebase';
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,8 +30,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const usernameRef = adminDb.ref(`usernames/${usernameLower}`);
-    const snapshot = await usernameRef.once('value');
+    // Usa o Firebase Client SDK diretamente
+    const usernameRef = ref(db, `usernames/${usernameLower}`);
+    const snapshot = await get(usernameRef);
 
     if (snapshot.exists()) {
       return NextResponse.json(

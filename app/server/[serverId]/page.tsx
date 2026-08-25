@@ -1,13 +1,12 @@
 // app/server/[serverId]/page.tsx
-import ServerClientWrapper from './ServerClientWrapper';
+"use client";
 
-interface ServerPageProps {
-  params: Promise<{
-    serverId: string;
-  }>;
-}
+import dynamic from "next/dynamic";
 
-export default async function ServerPage({ params }: ServerPageProps) {
-  const { serverId } = await params;
-  return <ServerClientWrapper serverId={serverId} />;
+const ChannelListContent = dynamic(() => import("./ChannelListContent"), {
+  ssr: false,
+});
+
+export default function ServerPage() {
+  return <ChannelListContent />;
 }

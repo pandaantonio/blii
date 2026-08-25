@@ -1,13 +1,11 @@
 // app/dm/[userId]/page.tsx
-import DMClientWrapper from '../DMClientWrapper';
+import DMChatClientWrapper from "./DMChatClientWrapper";
 
-interface DMUserPageProps {
-  params: Promise<{
-    userId: string;
-  }>;
+interface DMChatPageProps {
+  params: Promise<{ userId: string }>;
 }
 
-export default async function DMUserPage({ params }: DMUserPageProps) {
+export default async function DMChatPage({ params }: DMChatPageProps) {
   const { userId } = await params;
-  return <DMClientWrapper />;
+  return <DMChatClientWrapper userId={userId} />;
 }

@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { FaRegSmile, FaImage, FaPaperclip, FaTimes, FaFile } from "react-icons/fa";
+import { FaRegSmile, FaImage, FaPaperclip, FaTimes, FaFileImage } from "react-icons/fa";
 import { formatFileSize } from "./types";
 
 interface ChatComposerProps {
@@ -33,8 +33,6 @@ export default function ChatComposer({
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isImageFile = pendingFile?.type.startsWith("image/") || false;
-
   const selectFile = () => {
     setFileError("");
     fileInputRef.current?.click();
@@ -44,20 +42,19 @@ export default function ChatComposer({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 25 * 1024 * 1024) {
-      setFileError("Arquivo muito grande (m\u00e1ximo 25MB)");
+    if (!file.type.startsWith("image/")) {
+      setFileError("Apenas imagens s\u00e3o aceitas");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setFileError("Imagem muito grande (m\u00e1ximo 10MB)");
       return;
     }
 
     setPendingFile(file);
     setFileError("");
-
-    if (file.type.startsWith("image/")) {
-      const url = URL.createObjectURL(file);
-      setPreview(url);
-    } else {
-      setPreview(null);
-    }
+    setPreview(URL.createObjectURL(file));
 
     if (fileInputRef.current) fileInputRef.current.value = "";
     inputRef.current?.focus();
@@ -83,7 +80,6 @@ export default function ChatComposer({
 
   return (
     <div className="relative flex-shrink-0 border-t border-white/4 bg-white/2 px-4 py-3 pb-4">
-      {/* Preview do arquivo */}
       {pendingFile && (
         <div className="flex items-center gap-2.5 p-2.5 mb-2.5 bg-white/[0.03] border border-white/[0.06] rounded-[8px]">
           {preview ? (
@@ -94,17 +90,12 @@ export default function ChatComposer({
             />
           ) : (
             <div className="w-11 h-11 rounded-[6px] bg-[rgba(167,139,250,0.12)] flex items-center justify-center text-[#a78bfa] flex-shrink-0">
-              <FaFile />
+              <FaFileImage />
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <p className="m-0 text-sm text-[#f0ebff] truncate font-medium">
-              {pendingFile.name}
-            </p>
-            <p className="m-0 text-[0.7rem] text-[#7a6a9a]">
-              {formatFileSize(pendingFile.size)}
-              {isImageFile && " \u00b7 Imagem"}
-            </p>
+            <p className="m-0 text-sm text-[#f0ebff] truncate font-medium">{pendingFile.name}</p>
+            <p className="m-0 text-[0.7rem] text-[#7a6a9a]">{formatFileSize(pendingFile.size)} \u00b7 Imagem</p>
           </div>
           <button
             type="button"
@@ -118,9 +109,7 @@ export default function ChatComposer({
       )}
 
       {fileError && (
-        <p className="m-0 mb-2 px-2.5 py-1.5 bg-[rgba(248,113,113,0.08)] border border-[rgba(248,113,113,0.12)] rounded-[6px] text-[#f87171] text-xs">
-          {fileError}
-        </p>
+        <p className="m-0 mb-2 px-2.5 py-1.5 bg-[rgba(248,113,113,0.08)] border border-[rgba(248,113,113,0.12)] rounded-[6px] text-[#f87171] text-xs">{fileError}</p>
       )}
 
       <form className="flex items-center gap-2" onSubmit={handleSubmit}>
@@ -147,7 +136,7 @@ export default function ChatComposer({
             type="button"
             className={`flex items-center justify-center w-10 h-10 bg-transparent border border-transparent rounded-[10px] text-[#7a6a9a] text-base cursor-pointer transition-all duration-150 hover:bg-white/4 hover:text-[#ff8a5b] ${pendingFile ? "bg-white/4 border-white/6 text-[#ff8a5b]" : ""}`}
             onClick={selectFile}
-            title="Enviar arquivo"
+            title="Enviar imagem"
           >
             <FaPaperclip />
           </button>
@@ -172,6 +161,7 @@ export default function ChatComposer({
         <input
           ref={fileInputRef}
           type="file"
+          accept="image/*"
           className="hidden"
           onChange={handleFileChange}
         />

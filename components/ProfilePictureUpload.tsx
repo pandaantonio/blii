@@ -3,14 +3,39 @@
 
 import { useState, useRef } from "react";
 import { FaCamera, FaUser, FaTimes } from "react-icons/fa";
-import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { auth, db } from "@/lib/firebase";
 import { ref as dRef, update } from "firebase/database";
 import { updateProfile } from "firebase/auth";
 
+const IMGBB_KEY = process.env.NEXT_PUBLIC_IMGBB_KEY || "";
+
 interface ProfilePictureUploadProps {
   currentPhotoURL: string | null;
   onUpdate: (url: string | null) => void;
+}
+
+async function uploadToImgBB(file: File): Promise<string> {
+  const base64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result.split(",")[1]);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const formData = new FormData();
+  formData.append("key", IMGBB_KEY);
+  formData.append("image", base64);
+
+  const res = await fetch("https://api.imgbb.com/1/upload", {
+    method: "POST",
+    body: formData,
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error("Upload falhou");
+  return json.data.display_url || json.data.url;
 }
 
 export default function ProfilePictureUpload({
@@ -29,8 +54,12 @@ export default function ProfilePictureUpload({
       setError("Por favor, selecione uma imagem.");
       return;
     }
-    if (file.size > 2 * 1024 * 1024) {
-      setError("A imagem deve ter no m\u00e1ximo 2MB.");
+    if (file.size > 10 * 1024 * 1024) {
+      setError("A imagem deve ter no m\u00e1ximo 10MB.");
+      return;
+    }
+    if (!IMGBB_KEY) {
+      setError("Chave do ImgBB n\u00e3o configurada.");
       return;
     }
 
@@ -41,18 +70,9 @@ export default function ProfilePictureUpload({
       const user = auth.currentUser;
       if (!user) throw new Error("N\u00e3o autenticado");
 
-      if (currentPhotoURL) {
-        try {
-          await deleteObject(sRef(getStorage(), `profile-pictures/${user.uid}`));
-        } catch {}
-      }
-
-      const storageFileRef = sRef(getStorage(), `profile-pictures/${user.uid}`);
-      await uploadBytes(storageFileRef, file);
-      const downloadURL = await getDownloadURL(storageFileRef);
+      const downloadURL = await uploadToImgBB(file);
 
       await updateProfile(user, { photoURL: downloadURL });
-
       await update(dRef(db, `users/${user.uid}`), {
         photoURL: downloadURL,
         updatedAt: Date.now(),
@@ -75,12 +95,7 @@ export default function ProfilePictureUpload({
       const user = auth.currentUser;
       if (!user) throw new Error("N\u00e3o autenticado");
 
-      try {
-        await deleteObject(sRef(getStorage(), `profile-pictures/${user.uid}`));
-      } catch {}
-
       await updateProfile(user, { photoURL: null });
-
       await update(dRef(db, `users/${user.uid}`), {
         photoURL: null,
         updatedAt: Date.now(),
@@ -100,11 +115,7 @@ export default function ProfilePictureUpload({
       <div className="relative">
         <div className="w-28 h-28 rounded-full bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] flex items-center justify-center text-white text-3xl font-bold overflow-hidden border-2 border-[rgba(255,255,255,0.08)] shadow-[0_4px_20px_rgba(167,139,250,0.2)]">
           {currentPhotoURL ? (
-            <img
-              src={currentPhotoURL}
-              alt="Foto de perfil"
-              className="w-full h-full object-cover"
-            />
+            <img src={currentPhotoURL} alt="Foto de perfil" className="w-full h-full object-cover" />
           ) : (
             <FaUser />
           )}

@@ -2,7 +2,6 @@
 "use client";
 
 import React from "react";
-import Sidebar from "@/components/Sidebar";
 import {
   FaLock, FaTimes, FaPlus, FaCommentAlt, FaBookOpen, FaFolder,
   FaCrown, FaServer, FaShieldAlt, FaPencilAlt, FaTrash,
@@ -11,7 +10,7 @@ import { ServerProvider, useServerContext, Role } from "./ServerProvider";
 
 function LoadingScreen({ text }: { text: string }) {
   return (
-    <div className="min-h-screen min-h-dvh flex flex-col items-center justify-center gap-4 text-[#b8a8d9] text-sm ml-0 md:ml-[68px] w-full md:w-[calc(100%-68px)] bg-[radial-gradient(ellipse_at_20%_20%,#1a0a2e_0%,#0a0618_50%,#2d1045_100%)]">
+    <div className="min-h-screen min-h-dvh flex flex-col items-center justify-center gap-4 text-[#b8a8d9] text-sm w-full px-4 bg-[radial-gradient(ellipse_at_20%_20%,#1a0a2e_0%,#0a0618_50%,#2d1045_100%)]">
       <div className="w-10 h-10 border-3 border-white/6 border-t-[#a78bfa] rounded-full animate-spin" />
       <p>{text}</p>
     </div>
@@ -21,7 +20,7 @@ function LoadingScreen({ text }: { text: string }) {
 function AccessDenied() {
   const { router } = useServerContext();
   return (
-    <div className="min-h-screen min-h-dvh flex items-center justify-center ml-0 md:ml-[68px] w-full md:w-[calc(100%-68px)] px-4 bg-[radial-gradient(ellipse_at_20%_20%,#1a0a2e_0%,#0a0618_50%,#2d1045_100%)]">
+    <div className="min-h-screen min-h-dvh flex items-center justify-center w-full px-4 bg-[radial-gradient(ellipse_at_20%_20%,#1a0a2e_0%,#0a0618_50%,#2d1045_100%)]">
       <div className="bg-white/2 backdrop-blur-xl border border-white/6 rounded-2xl p-8 md:p-12 text-center max-w-md">
         <div className="text-4xl text-[#7a6a9a] mb-4"><FaLock /></div>
         <h2 className="font-['Sora','Inter',system-ui,sans-serif] text-2xl font-bold text-[#f0ebff] m-0">Acesso restrito</h2>
@@ -331,27 +330,16 @@ function ServerShellInner({ children }: { children: React.ReactNode }) {
   const { loading, serverData, user, isMember } = useServerContext();
 
   if (loading || !serverData || !user) {
-    return (
-      <>
-        <Sidebar />
-        <LoadingScreen text="Carregando..." />
-      </>
-    );
+    return <LoadingScreen text="Carregando..." />;
   }
 
   if (!isMember) {
-    return (
-      <>
-        <Sidebar />
-        <AccessDenied />
-      </>
-    );
+    return <AccessDenied />;
   }
 
   return (
     <>
-      <Sidebar />
-      <div className="min-h-screen min-h-dvh text-[#f0ebff] font-['Inter',system-ui,-apple-system,'Segoe_UI',Roboto,sans-serif] ml-0 md:ml-[68px] w-full md:w-[calc(100%-68px)] bg-[radial-gradient(ellipse_at_20%_20%,#1a0a2e_0%,#0a0618_50%,#2d1045_100%)]">
+      <div className="min-h-screen min-h-dvh w-full text-[#f0ebff] font-['Inter',system-ui,-apple-system,'Segoe_UI',Roboto,sans-serif] bg-[radial-gradient(ellipse_at_20%_20%,#1a0a2e_0%,#0a0618_50%,#2d1045_100%)]">
         {children}
       </div>
       <CreateChannelModal />

@@ -5,8 +5,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db, ref, get, set, onValue } from "@/lib/firebase";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
-import { FaComment, FaCircle, FaUserPlus, FaCheck, FaTimes, FaUser } from "react-icons/fa";
-import Sidebar from "@/components/Sidebar";
+import { FaComment, FaCircle, FaUserPlus, FaCheck, FaTimes, FaUser, FaArrowLeft } from "react-icons/fa";
 
 interface AppUser {
   uid: string;
@@ -325,42 +324,48 @@ export default function DMContent() {
 
   if (!mounted || loading || !user) {
     return (
-      <>
-        <Sidebar />
-        <div className="min-h-screen min-h-dvh flex flex-col items-center justify-center gap-4 text-[#b8a8d9] text-sm pl-[64px] transition-all duration-300">
-          <div className="w-10 h-10 border-3 border-white/6 border-t-[#a78bfa] rounded-full animate-spin" />
-          <p>Carregando...</p>
-        </div>
-      </>
+      <div className="min-h-screen min-h-dvh flex flex-col items-center justify-center gap-4 text-[#b8a8d9] text-sm px-4">
+        <div className="w-10 h-10 border-3 border-white/6 border-t-[#a78bfa] rounded-full animate-spin" />
+        <p>Carregando...</p>
+      </div>
     );
   }
 
   return (
     <>
-      <Sidebar />
-      <div className="min-h-screen min-h-dvh relative overflow-hidden text-[#f0ebff] font-['Inter',system-ui,-apple-system,'Segoe_UI',Roboto,sans-serif] bg-[radial-gradient(ellipse_at_20%_20%,#1a0a2e_0%,#0a0618_50%,#2d1045_100%)] flex items-center justify-center p-5 transition-all duration-300 pl-[64px]">
-        {/* Orbs decorativos */}
-        <div className="fixed w-[800px] h-[800px] -top-[300px] -right-[200px] bg-[radial-gradient(circle,rgba(167,139,250,0.06)_0%,transparent_70%)] pointer-events-none z-0 blur-[80px]" aria-hidden="true" />
-        <div className="fixed w-[600px] h-[600px] -bottom-[200px] -left-[200px] bg-[radial-gradient(circle,rgba(255,138,91,0.04)_0%,transparent_70%)] pointer-events-none z-0 blur-[80px]" aria-hidden="true" />
+    <div className="min-h-screen min-h-dvh relative overflow-hidden text-[#f0ebff] font-['Inter',system-ui,-apple-system,'Segoe_UI',Roboto,sans-serif] bg-[radial-gradient(ellipse_at_20%_20%,#1a0a2e_0%,#0a0618_50%,#2d1045_100%)] flex items-center justify-center p-2 sm:p-5">
+      {/* Orbs decorativos */}
+      <div className="fixed w-[800px] h-[800px] -top-[300px] -right-[200px] bg-[radial-gradient(circle,rgba(167,139,250,0.06)_0%,transparent_70%)] pointer-events-none z-0 blur-[80px]" aria-hidden="true" />
+      <div className="fixed w-[600px] h-[600px] -bottom-[200px] -left-[200px] bg-[radial-gradient(circle,rgba(255,138,91,0.04)_0%,transparent_70%)] pointer-events-none z-0 blur-[80px]" aria-hidden="true" />
 
-        {/* Container principal */}
-        <div className="relative z-10 flex flex-col w-full max-w-[1400px] h-[calc(100vh-40px)] max-h-[900px] bg-white/2 backdrop-blur-[40px] border border-white/4 rounded-3xl overflow-hidden shadow-[0_32px_80px_rgba(0,0,0,0.5)]">
-          <div className="w-full h-full flex flex-col overflow-hidden px-6 sm:px-8 py-6">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6 flex-shrink-0">
-              <h1 className="font-['Sora','Inter',system-ui,sans-serif] text-xl font-bold text-[#f0ebff] m-0 flex items-center gap-2.5">
-                <FaComment className="text-[#a78bfa]" />
-                Mensagens diretas
-              </h1>
+      {/* Container principal */}
+      <div className="relative z-10 flex flex-col w-full max-w-[1400px] h-[calc(100vh-16px)] sm:h-[calc(100vh-40px)] max-h-[900px] bg-white/2 backdrop-blur-[40px] border border-white/4 rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_32px_80px_rgba(0,0,0,0.5)]">
+        <div className="w-full h-full flex flex-col overflow-hidden px-4 sm:px-6 md:px-8 py-4 sm:py-6">
+          {/* Header */}
+          <div className="flex items-center gap-2 sm:gap-4 justify-between mb-4 sm:mb-6 flex-shrink-0 flex-wrap">
+            <div className="flex items-center gap-1 sm:gap-2 min-w-0">
               <button
                 type="button"
-                className="flex items-center justify-center gap-2 h-10 px-4 bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] border-none rounded-xl text-white text-sm font-bold cursor-pointer transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(167,139,250,0.35)]"
-                onClick={() => setShowFriendModal(true)}
+                className="flex items-center justify-center w-9 h-9 flex-shrink-0 bg-transparent border-none rounded-lg text-[#7a6a9a] cursor-pointer transition-all duration-200 hover:bg-[rgba(255,255,255,0.04)] hover:text-[#f0ebff]"
+                onClick={() => router.push("/general")}
+                title="Voltar"
               >
-                <FaUserPlus />
-                <span className="hidden sm:inline">Adicionar amigo</span>
+                <FaArrowLeft />
               </button>
+              <h1 className="font-['Sora','Inter',system-ui,sans-serif] text-lg sm:text-xl font-bold text-[#f0ebff] m-0 flex items-center gap-2 sm:gap-2.5 truncate">
+                <FaComment className="text-[#a78bfa] flex-shrink-0" />
+                <span className="truncate">Mensagens diretas</span>
+              </h1>
             </div>
+            <button
+              type="button"
+              className="flex items-center justify-center gap-2 h-10 px-3 sm:px-4 bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] border-none rounded-xl text-white text-sm font-bold cursor-pointer transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(167,139,250,0.35)] flex-shrink-0"
+              onClick={() => setShowFriendModal(true)}
+            >
+              <FaUserPlus />
+              <span className="hidden sm:inline">Adicionar amigo</span>
+            </button>
+          </div>
 
             <div className="flex-1 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[rgba(167,139,250,0.2)] [&::-webkit-scrollbar-thumb]:rounded-full">
               {/* Amigos online */}
@@ -470,7 +475,7 @@ export default function DMContent() {
       {/* Modal Adicionar Amigo */}
       {showFriendModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-3xl flex items-center justify-center z-[2000] p-5" onClick={closeFriendModal}>
-          <div className="relative w-full max-w-[440px] p-10 px-9 bg-[linear-gradient(165deg,rgba(20,10,40,0.98),rgba(30,15,50,0.98))] backdrop-blur-[20px] border border-white/6 rounded-3xl shadow-[0_32px_80px_rgba(0,0,0,0.6)] text-center" onClick={(e) => e.stopPropagation()}>
+          <div className="relative w-full max-w-[440px] p-6 sm:p-10 sm:px-9 bg-[linear-gradient(165deg,rgba(20,10,40,0.98),rgba(30,15,50,0.98))] backdrop-blur-[20px] border border-white/6 rounded-3xl shadow-[0_32px_80px_rgba(0,0,0,0.6)] text-center" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
               className="absolute top-4 right-4 flex items-center justify-center w-9 h-9 bg-white/3 border border-white/6 rounded-[10px] text-[#7a6a9a] text-sm cursor-pointer transition-all duration-200 hover:bg-white/8 hover:text-[#f0ebff]"

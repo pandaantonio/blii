@@ -18,6 +18,7 @@ body {
   padding: 0;
 }
 
+/* ---------- Shared animations ---------- */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
@@ -33,44 +34,13 @@ body {
   to { opacity: 1; transform: translateX(0); }
 }
 
-/* globals.css - Adicione no final */
-
-/* Sidebar toggle para mobile */
-@media (max-width: 768px) {
-  body {
-    padding-left: 0 !important;
-  }
-  
-  /* Ajuste do conteúdo quando sidebar está fechado */
-  .ml-\[68px\] {
-    margin-left: 0 !important;
-    width: 100% !important;
-  }
+/* Ambient orb pulse used on the landing page (app/components/HomeContent.tsx) */
+@keyframes homeOrbPulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.1); }
 }
 
-/* Animações para o sidebar */
-@keyframes slideIn {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-
-@keyframes slideOut {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-100%);
-  }
-}
-
-.sidebar-enter {
-  animation: slideIn 0.3s ease-out;
-}
-
-.sidebar-exit {
-  animation: slideOut 0.3s ease-in;
+@keyframes homeOrbPulseReverse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
 }

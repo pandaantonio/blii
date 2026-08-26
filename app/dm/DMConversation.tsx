@@ -12,7 +12,7 @@ import {
   onChildChanged,
   onChildRemoved,
 } from "firebase/database";
-import { uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref as sRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { FaUser, FaArrowLeft } from "react-icons/fa";
 import MessageList from "@/components/chat/MessageList";
 import EmojiPickerPanel from "@/components/chat/EmojiPickerPanel";
@@ -74,7 +74,6 @@ export default function DMConversation({
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const initialLoadDone = useRef(false);
 
-  // Criar/obter DM
   useEffect(() => {
     if (!user || !peer?.userId) {
       setDmId(null);
@@ -117,7 +116,6 @@ export default function DMConversation({
     return () => { cancelled = true; };
   }, [user, peer, username, displayName, photoURL]);
 
-  // Escuta mensagens
   useEffect(() => {
     if (!dmId) { setMessages([]); return; }
     initialLoadDone.current = false;
@@ -148,7 +146,6 @@ export default function DMConversation({
     return () => { u1(); u2(); u3(); };
   }, [dmId]);
 
-  // Scroll inteligente
   useEffect(() => {
     if (messages.length === 0) return;
     const c = messagesContainerRef.current;
@@ -162,7 +159,6 @@ export default function DMConversation({
     if (!initialLoadDone.current) initialLoadDone.current = true;
   }, [messages]);
 
-  // Click outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
@@ -173,23 +169,20 @@ export default function DMConversation({
     return () => document.removeEventListener("mousedown", handler);
   }, [showEmoji, showGif]);
 
-  // Upload de arquivo para o Storage
-  const uploadFile = useCallback(async (file: File, msgRefPath: string): Promise<string> => {
+  const uploadFile = useCallback(async (file: File, msgKey: string): Promise<string> => {
     const ext = file.name.split(".").pop() || "bin";
-    const storagePath = `dm-attachments/${msgRefPath.replace(/\//g, "_")}.${ext}`;
-    const storageRef = ref(storage, storagePath);
-    await uploadBytes(storageRef, file);
-    return getDownloadURL(storageRef);
+    const storagePath = `dm-attachments/${msgKey}.${ext}`;
+    const fileRef = sRef(storage, storagePath);
+    await uploadBytes(fileRef, file);
+    return getDownloadURL(fileRef);
   }, []);
 
-  // Atualiza lastMessage do DM
   const updateDmMeta = useCallback(async (id: string, text: string, time: number) => {
     try {
       await update(ref(db, `dms/${id}`), { lastMessage: buildPreviewText(text), lastMessageTime: time });
     } catch {}
   }, []);
 
-  // Enviar texto
   const handleSendText = useCallback(async (text: string) => {
     if (!dmId || sending) return;
     setSending(true);
@@ -205,7 +198,6 @@ export default function DMConversation({
     finally { setSending(false); }
   }, [dmId, sending, user.uid, username, displayName, photoURL, updateDmMeta]);
 
-  // Enviar GIF
   const handleSendGif = useCallback(async (gif: GifData) => {
     if (!dmId || sending) return;
     setSending(true);
@@ -223,14 +215,13 @@ export default function DMConversation({
     finally { setSending(false); }
   }, [dmId, sending, user.uid, username, displayName, photoURL, updateDmMeta]);
 
-  // Enviar arquivo/imagem
   const handleSendFile = useCallback(async (text: string, file: File) => {
     if (!dmId || sending) return;
     setSending(true);
     try {
       const msgRef = push(ref(db, `dms/${dmId}/messages`));
-      const msgPath = `dms/${dmId}/messages/${msgRef.key}`;
-      const fileUrl = await uploadFile(file, msgPath);
+      const msgKey = msgRef.key || String(Date.now());
+      const fileUrl = await uploadFile(file, msgKey);
       const isImage = file.type.startsWith("image/");
       const now = Date.now();
       await set(msgRef, {
@@ -253,7 +244,6 @@ export default function DMConversation({
     finally { setSending(false); }
   }, [dmId, sending, user.uid, username, displayName, photoURL, uploadFile, updateDmMeta]);
 
-  // Handler unificado do composer
   const handleSend = useCallback(async (text: string, file?: File) => {
     if (file) {
       await handleSendFile(text, file);
@@ -262,23 +252,17 @@ export default function DMConversation({
     }
   }, [handleSendText, handleSendFile]);
 
-  // Deletar mensagem
   const handleDelete = useCallback(async (messageId: string) => {
     if (!confirm("Tem certeza que deseja deletar esta mensagem?")) return;
     try { await remove(ref(db, `dms/${dmId}/messages/${messageId}`)); }
     catch (e) { console.error("Erro:", e); }
   }, [dmId]);
 
-  // Inserir emoji
   const handleEmojiSelect = useCallback((emoji: string) => {
-    // Focus no input do composer e injeta o emoji
-    const input = document.querySelector<HTMLInputElement>(
-      "[data-chat-composer] input[type='text']"
-    );
+    const input = document.querySelector<HTMLInputElement>("[data-chat-composer] input[type='text']");
     if (input) {
       const start = input.selectionStart || input.value.length;
       const newVal = input.value.slice(0, start) + emoji + input.value.slice(start);
-      // O composer gerencia seu próprio estado, então disparamos o evento nativo
       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
       nativeInputValueSetter?.call(input, newVal);
       input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -290,7 +274,6 @@ export default function DMConversation({
 
   return (
     <div className="flex-1 flex flex-col h-full max-w-none m-0 relative">
-      {/* Header */}
       <header className="flex items-center gap-3 px-4 py-3 border-b border-white/4 bg-white/2 flex-shrink-0">
         <button
           type="button"
@@ -317,7 +300,6 @@ export default function DMConversation({
         </div>
       </header>
 
-      {/* Messages */}
       <div
         ref={messagesContainerRef}
         className="flex-1 overflow-y-auto px-4 py-5 flex flex-col gap-0.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[rgba(255,255,255,0.08)] [&::-webkit-scrollbar-thumb]:rounded-sm"
@@ -340,7 +322,6 @@ export default function DMConversation({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Panels */}
       {showEmoji && (
         <EmojiPickerPanel
           onSelect={handleEmojiSelect}
@@ -354,7 +335,6 @@ export default function DMConversation({
         />
       )}
 
-      {/* Composer */}
       <div data-chat-composer>
         <ChatComposer
           onSend={handleSend}

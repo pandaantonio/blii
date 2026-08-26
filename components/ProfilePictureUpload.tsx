@@ -3,10 +3,10 @@
 
 import { useState, useRef } from "react";
 import { FaCamera, FaUser, FaTimes } from "react-icons/fa";
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
-import { storage, auth, db } from "@/lib/firebase";
+import { getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { auth, db } from "@/lib/firebase";
+import { ref as dRef, update } from "firebase/database";
 import { updateProfile } from "firebase/auth";
-import { update } from "firebase/database";
 
 interface ProfilePictureUploadProps {
   currentPhotoURL: string | null;
@@ -43,17 +43,17 @@ export default function ProfilePictureUpload({
 
       if (currentPhotoURL) {
         try {
-          await deleteObject(ref(storage, `profile-pictures/${user.uid}`));
+          await deleteObject(sRef(getStorage(), `profile-pictures/${user.uid}`));
         } catch {}
       }
 
-      const storageRef = ref(storage, `profile-pictures/${user.uid}`);
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
+      const storageFileRef = sRef(getStorage(), `profile-pictures/${user.uid}`);
+      await uploadBytes(storageFileRef, file);
+      const downloadURL = await getDownloadURL(storageFileRef);
 
       await updateProfile(user, { photoURL: downloadURL });
 
-      await update(ref(db, `users/${user.uid}`), {
+      await update(dRef(db, `users/${user.uid}`), {
         photoURL: downloadURL,
         updatedAt: Date.now(),
       });
@@ -76,12 +76,12 @@ export default function ProfilePictureUpload({
       if (!user) throw new Error("N\u00e3o autenticado");
 
       try {
-        await deleteObject(ref(storage, `profile-pictures/${user.uid}`));
+        await deleteObject(sRef(getStorage(), `profile-pictures/${user.uid}`));
       } catch {}
 
       await updateProfile(user, { photoURL: null });
 
-      await update(ref(db, `users/${user.uid}`), {
+      await update(dRef(db, `users/${user.uid}`), {
         photoURL: null,
         updatedAt: Date.now(),
       });

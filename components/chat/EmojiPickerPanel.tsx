@@ -3,6 +3,7 @@
 
 import { FaTimes } from "react-icons/fa";
 import dynamic from "next/dynamic";
+import { Categories } from "emoji-picker-react";
 
 const EmojiPicker = dynamic(
   () => import("emoji-picker-react").then((mod) => mod.default),
@@ -42,14 +43,14 @@ export default function EmojiPickerPanel({ onSelect, onClose }: EmojiPickerPanel
           skinTonesDisabled
           lazyLoadEmojis
           categories={[
-            { category: "smileys_people", name: "Smileys & Pessoas" },
-            { category: "animals_nature", name: "Animais & Natureza" },
-            { category: "food_drink", name: "Comida & Bebida" },
-            { category: "activities", name: "Atividades" },
-            { category: "travel_places", name: "Viagens & Lugares" },
-            { category: "objects", name: "Objetos" },
-            { category: "symbols", name: "S\u00edmbolos" },
-            { category: "flags", name: "Bandeiras" },
+            { category: Categories.SMILEYS_PEOPLE, name: "Smileys & Pessoas" },
+            { category: Categories.ANIMALS_NATURE, name: "Animais & Natureza" },
+            { category: Categories.FOOD_DRINK, name: "Comida & Bebida" },
+            { category: Categories.ACTIVITIES, name: "Atividades" },
+            { category: Categories.TRAVEL_PLACES, name: "Viagens & Lugares" },
+            { category: Categories.OBJECTS, name: "Objetos" },
+            { category: Categories.SYMBOLS, name: "S\u00edmbolos" },
+            { category: Categories.FLAGS, name: "Bandeiras" },
           ]}
           style={{
             backgroundColor: "#2b2d31",

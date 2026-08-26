@@ -9,6 +9,7 @@ interface MessageListProps {
   currentUserId: string;
   ownDisplayName: string;
   peerDisplayName: string;
+  userPhotos?: Record<string, string | null>;
   onDelete: (id: string) => void;
 }
 
@@ -38,6 +39,7 @@ export default function MessageList({
   currentUserId,
   ownDisplayName,
   peerDisplayName,
+  userPhotos,
   onDelete,
 }: MessageListProps) {
   if (messages.length === 0) return null;
@@ -51,6 +53,7 @@ export default function MessageList({
         const prevBlock = bi > 0 ? blocks[bi - 1] : null;
         const showHeader = !prevBlock || prevBlock.authorId !== block.authorId;
         const gapBefore = bi > 0 && !showHeader ? "mt-[2px]" : "mt-4";
+        const livePhoto = userPhotos?.[block.authorId] ?? null;
 
         return (
           <div
@@ -59,13 +62,8 @@ export default function MessageList({
           >
             {showHeader ? (
               <div className="w-10 h-10 flex-shrink-0 rounded-full bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] flex items-center justify-center text-white text-sm font-bold uppercase overflow-hidden mt-0.5">
-                {block.photoURL ? (
-                  <img
-                    src={block.photoURL}
-                    alt={block.authorName}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
+                {livePhoto ? (
+                  <img src={livePhoto} alt={block.authorName} className="w-full h-full object-cover" loading="lazy" />
                 ) : (
                   block.authorName?.charAt(0)?.toUpperCase() || "U"
                 )}
@@ -74,9 +72,7 @@ export default function MessageList({
               <div className="w-10 flex-shrink-0" />
             )}
 
-            <div
-              className={`flex-1 min-w-0 flex flex-col gap-[2px] ${isOwn ? "items-end" : ""}`}
-            >
+            <div className={`flex-1 min-w-0 flex flex-col gap-[2px] ${isOwn ? "items-end" : ""}`}>
               {block.msgs.map((msg) => (
                 <MessageBubble
                   key={msg.id}
@@ -85,6 +81,7 @@ export default function MessageList({
                   showHeader={showHeader && block.msgs.indexOf(msg) === 0}
                   authorName={isOwn ? ownDisplayName : peerDisplayName}
                   authorColor={isOwn ? "#ff8a5b" : "#a78bfa"}
+                  livePhotoURL={userPhotos?.[msg.authorId] ?? null}
                   onDelete={isOwn ? onDelete : undefined}
                 />
               ))}

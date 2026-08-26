@@ -43,3 +43,32 @@ export function formatMsgTime(ts: number): string {
     minute: "2-digit",
   });
 }
+
+export type TextSegment =
+  | { type: "text"; content: string }
+  | { type: "image"; url: string };
+
+const IMAGE_URL_RE = /https?:\/\/[^\s<>"']+\.(?:jpe?g|png|gif|webp|svg|bmp|avif|tiff?)(?:\?[^\s<>"']*)?/gi;
+
+export function parseTextWithImages(text: string): TextSegment[] {
+  if (!text) return [{ type: "text", content: "" }];
+  if (!IMAGE_URL_RE.test(text)) return [{ type: "text", content: text }];
+
+  const segments: TextSegment[] = [];
+  let last = 0;
+  IMAGE_URL_RE.lastIndex = 0;
+
+  let m: RegExpExecArray | null;
+  while ((m = IMAGE_URL_RE.exec(text)) !== null) {
+    if (m.index > last) {
+      segments.push({ type: "text", content: text.slice(last, m.index) });
+    }
+    segments.push({ type: "image", url: m[0] });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) {
+    segments.push({ type: "text", content: text.slice(last) });
+  }
+
+  return segments;
+}

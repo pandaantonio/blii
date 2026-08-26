@@ -1,118 +1,136 @@
 // components/ProfilePictureUpload.tsx
 "use client";
 
-import { useState, useCallback } from "react";
-import { FaLink, FaSpinner, FaTrash, FaCheck } from "react-icons/fa";
+import { useState, useRef } from "react";
+import { FaCamera, FaUser, FaTimes } from "react-icons/fa";
+import { auth, db } from "@/lib/firebase";
+import { ref as dRef, update } from "firebase/database";
+import { compressImage, base64SizeBytes } from "@/lib/imageUtils";
 
-interface Props {
+interface ProfilePictureUploadProps {
   currentPhotoURL: string | null;
   onUpdate: (url: string | null) => void;
-  size?: number;
 }
 
 export default function ProfilePictureUpload({
   currentPhotoURL,
   onUpdate,
-  size = 88,
-}: Props) {
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
+}: ProfilePictureUploadProps) {
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = useCallback(() => {
-    const trimmed = input.trim();
-    if (!trimmed) return;
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    try {
-      new URL(trimmed);
-    } catch {
-      setError("URL inválida");
+    if (!file.type.startsWith("image/")) {
+      setError("Por favor, selecione uma imagem.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError("A imagem deve ter no m\u00e1ximo 10MB.");
       return;
     }
 
-    setLoading(true);
+    setUploading(true);
     setError(null);
 
-    // Verifica se a imagem carrega
-    const img = new Image();
-    img.onload = () => {
-      onUpdate(trimmed);
-      setInput("");
-      setLoading(false);
-    };
-    img.onerror = () => {
-      setError("Imagem não encontrada ou bloqueada");
-      setLoading(false);
-    };
-    img.src = trimmed;
-  }, [input, onUpdate]);
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("N\u00e3o autenticado");
+
+      const dataUrl = await compressImage(file, 512, 0.7);
+
+      if (base64SizeBytes(dataUrl) > 1024 * 1024) {
+        setError("Imagem muito grande mesmo ap\u00f3s compress\u00e3o.");
+        setUploading(false);
+        return;
+      }
+
+      // Só salva no banco — Auth não suporta base64 longo
+      await update(dRef(db, `users/${user.uid}`), {
+        photoURL: dataUrl,
+        updatedAt: Date.now(),
+      });
+
+      onUpdate(dataUrl);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (err) {
+      console.error("Erro ao fazer upload:", err);
+      setError("Erro ao processar a imagem. Tente novamente.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    if (!confirm("Tem certeza que deseja remover sua foto de perfil?")) return;
+    setUploading(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("N\u00e3o autenticado");
+
+      await update(dRef(db, `users/${user.uid}`), {
+        photoURL: null,
+        updatedAt: Date.now(),
+      });
+
+      onUpdate(null);
+    } catch (err) {
+      console.error("Erro ao remover foto:", err);
+      setError("Erro ao remover foto. Tente novamente.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <div className="flex flex-col items-center gap-3">
-      {/* Avatar */}
-      <div
-        className="relative rounded-full overflow-hidden border-2 border-white/10"
-        style={{ width: size, height: size }}
-      >
-        {currentPhotoURL ? (
-          <img
-            src={currentPhotoURL}
-            alt="Avatar"
-            className="w-full h-full object-cover"
-            draggable={false}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-[rgba(255,255,255,0.04)] text-[#7a6a9a]">
-            <span className="text-[length:clamp(1rem,3vw,1.5rem)] font-bold">
-              ?
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Input de URL */}
-      <div className="flex items-center gap-2 w-full max-w-[260px]">
-        <div className="flex-1 relative">
-          <FaLink className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7a6a9a] text-[10px]" />
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              setError(null);
-            }}
-            onKeyDown={(e) => e.key === "Enter" && !loading && handleSubmit()}
-            placeholder="Cole o link da imagem"
-            className="w-full h-9 pl-8 pr-3 bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] rounded-lg text-[#f0ebff] text-xs outline-none placeholder:text-[#7a6a9a] focus:border-[#a78bfa] transition-colors font-inherit"
-          />
+      <div className="relative">
+        <div className="w-28 h-28 rounded-full bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] flex items-center justify-center text-white text-3xl font-bold overflow-hidden border-2 border-[rgba(255,255,255,0.08)] shadow-[0_4px_20px_rgba(167,139,250,0.2)]">
+          {currentPhotoURL ? (
+            <img src={currentPhotoURL} alt="Foto de perfil" className="w-full h-full object-cover" />
+          ) : (
+            <FaUser />
+          )}
         </div>
         <button
           type="button"
-          onClick={handleSubmit}
-          disabled={loading || !input.trim()}
-          className="h-9 px-3 rounded-lg bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] border-none text-white text-xs font-semibold cursor-pointer flex items-center justify-center transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none flex-shrink-0"
+          className="absolute -bottom-1 -right-1 flex items-center justify-center w-9 h-9 bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] border-2 border-[#0a0618] rounded-full text-white cursor-pointer transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          title="Alterar foto"
         >
-          {loading ? (
-            <FaSpinner className="animate-spin text-xs" />
-          ) : (
-            <FaCheck className="text-xs" />
-          )}
+          <FaCamera className="text-sm" />
         </button>
       </div>
-
-      {/* Remover */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileSelect}
+        disabled={uploading}
+      />
       {currentPhotoURL && (
         <button
           type="button"
-          onClick={() => onUpdate(null)}
-          className="flex items-center gap-1.5 text-[10px] sm:text-xs text-[#7a6a9a] hover:text-red-400 transition-colors cursor-pointer bg-transparent border-none font-inherit"
+          className="text-xs text-[#7a6a9a] hover:text-[#f87171] transition-colors duration-200 flex items-center gap-1"
+          onClick={handleRemovePhoto}
+          disabled={uploading}
         >
-          <FaTrash className="text-[9px]" /> Remover
+          <FaTimes className="text-[10px]" /> Remover foto
         </button>
       )}
-
+      {uploading && (
+        <span className="text-xs text-[#b8a8d9] flex items-center gap-2">
+          <span className="w-3 h-3 border-2 border-[#a78bfa] border-t-transparent rounded-full animate-spin" />
+          Processando...
+        </span>
+      )}
       {error && (
-        <p className="text-[10px] sm:text-xs text-red-400 m-0">{error}</p>
+        <span className="text-xs text-[#f87171] text-center">{error}</span>
       )}
     </div>
   );

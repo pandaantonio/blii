@@ -10,6 +10,7 @@ import {
   onChildAdded,
   onChildChanged,
   onChildRemoved,
+  onValue,
 } from "firebase/database";
 import { FaUser, FaArrowLeft } from "react-icons/fa";
 import MessageList from "@/components/chat/MessageList";
@@ -17,8 +18,7 @@ import EmojiPickerPanel from "@/components/chat/EmojiPickerPanel";
 import GifPickerPanel from "@/components/chat/GifPickerPanel";
 import ChatComposer from "@/components/chat/ChatComposer";
 import { Message, GifData } from "@/components/chat/types";
-
-const IMGBB_KEY = process.env.NEXT_PUBLIC_IMGBB_KEY || "";
+import { compressImage, base64SizeBytes } from "@/lib/imageUtils";
 
 interface AppUser {
   uid: string;
@@ -56,22 +56,6 @@ const buildPreviewText = (text: string): string => {
   return text;
 };
 
-async function uploadToImgBB(file: File): Promise<string> {
-  const base64 = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve((reader.result as string).split(",")[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-  const formData = new FormData();
-  formData.append("key", IMGBB_KEY);
-  formData.append("image", base64);
-  const res = await fetch("https://api.imgbb.com/1/upload", { method: "POST", body: formData });
-  const json = await res.json();
-  if (!json.success) throw new Error("Upload falhou");
-  return json.data.display_url || json.data.url;
-}
-
 export default function DMConversation({
   user,
   peer,
@@ -85,10 +69,25 @@ export default function DMConversation({
   const [dmId, setDmId] = useState<string | null>(null);
   const [showEmoji, setShowEmoji] = useState(false);
   const [showGif, setShowGif] = useState(false);
+  const [userPhotos, setUserPhotos] = useState<Record<string, string | null>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const initialLoadDone = useRef(false);
+
+  // Fotos atualizadas em tempo real
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onValue(ref(db, "users"), (snap) => {
+      const data = snap.val() || {};
+      const photos: Record<string, string | null> = {};
+      for (const [uid, u] of Object.entries(data)) {
+        photos[uid] = (u as any).photoURL || null;
+      }
+      setUserPhotos(photos);
+    });
+    return () => unsub();
+  }, [user]);
 
   useEffect(() => {
     if (!user || !peer?.userId) { setDmId(null); setMessages([]); return; }
@@ -172,6 +171,26 @@ export default function DMConversation({
     return () => document.removeEventListener("mousedown", handler);
   }, [showEmoji, showGif]);
 
+  useEffect(() => {
+    if (!dmId) return;
+    const handler = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith("image/")) {
+          e.preventDefault();
+          const file = items[i].getAsFile();
+          if (file && !sending) {
+            await handleSendFile("Imagem colada", file);
+          }
+          return;
+        }
+      }
+    };
+    document.addEventListener("paste", handler);
+    return () => document.removeEventListener("paste", handler);
+  }, [dmId, sending]);
+
   const updateDmMeta = useCallback(async (id: string, text: string, time: number) => {
     try { await update(ref(db, `dms/${id}`), { lastMessage: buildPreviewText(text), lastMessageTime: time }); } catch {}
   }, []);
@@ -205,16 +224,17 @@ export default function DMConversation({
     if (!dmId || sending) return;
     setSending(true);
     try {
-      const fileUrl = await uploadToImgBB(file);
+      const dataUrl = await compressImage(file, 1280, 0.75);
+      if (base64SizeBytes(dataUrl) > 2 * 1024 * 1024) { setSending(false); return; }
       const r = push(ref(db, `dms/${dmId}/messages`));
       const now = Date.now();
       await set(r, {
-        type: "image", text: text || "", fileUrl, fileName: file.name,
+        type: "image", text: text || "", fileUrl: dataUrl, fileName: file.name,
         fileSize: file.size, fileMime: file.type,
         authorId: user.uid, author: username, displayName,
         photoURL: photoURL || null, timestamp: now, edited: false,
       });
-      const preview = "\u{1F4F7} " + file.name;
+      const preview = "\u{1F4F7} " + (file.name || "cola");
       await updateDmMeta(dmId, text ? text + " " + preview : preview, now);
     } catch (e) { console.error("Erro:", e); }
     finally { setSending(false); }
@@ -239,10 +259,11 @@ export default function DMConversation({
       setter?.call(input, newVal);
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.focus();
-      const pos = start + emoji.length;
-      input.setSelectionRange(pos, pos);
+      input.setSelectionRange(start + emoji.length, start + emoji.length);
     }
   }, []);
+
+  const peerPhoto = userPhotos[peer.userId] ?? peer.photoURL;
 
   return (
     <div className="flex-1 flex flex-col h-full max-w-none m-0 relative">
@@ -252,7 +273,7 @@ export default function DMConversation({
         </button>
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <div className="w-10 h-10 rounded-[10px] bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] flex items-center justify-center text-white font-['Sora','Inter',system-ui,sans-serif] text-base font-bold uppercase flex-shrink-0 shadow-[0_0_0_1px_rgba(255,255,255,0.04)] overflow-hidden">
-            {peer.photoURL ? <img src={peer.photoURL} alt={peer.displayName} className="w-full h-full object-cover" loading="lazy" /> : (peer.displayName?.charAt(0)?.toUpperCase() || <FaUser />)}
+            {peerPhoto ? <img src={peerPhoto} alt={peer.displayName} className="w-full h-full object-cover" loading="lazy" /> : (peer.displayName?.charAt(0)?.toUpperCase() || <FaUser />)}
           </div>
           <div className="flex flex-col gap-0.5 min-w-0">
             <span className="font-['Sora','Inter',system-ui,sans-serif] text-sm font-bold text-[#f0ebff] whitespace-nowrap overflow-hidden text-ellipsis">{peer.displayName}</span>
@@ -269,7 +290,14 @@ export default function DMConversation({
             <span className="text-sm text-[#7a6a9a]">Envie algo para {peer.displayName}</span>
           </div>
         ) : (
-          <MessageList messages={messages} currentUserId={user.uid} ownDisplayName={displayName} peerDisplayName={peer.displayName} onDelete={handleDelete} />
+          <MessageList
+            messages={messages}
+            currentUserId={user.uid}
+            ownDisplayName={displayName}
+            peerDisplayName={peer.displayName}
+            userPhotos={userPhotos}
+            onDelete={handleDelete}
+          />
         )}
         <div ref={messagesEndRef} />
       </div>

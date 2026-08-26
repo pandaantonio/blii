@@ -93,7 +93,7 @@ export default function RegisterContent() {
         },
       });
 
-      router.push("/dm");
+      router.push("/general");
     } catch (err: any) {
       console.error("Erro detalhado:", err);
 

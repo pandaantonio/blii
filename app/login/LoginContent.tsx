@@ -36,7 +36,7 @@ export default function LoginContent() {
     try {
       const syntheticEmail = `${usernameLower}@users.identity.app`;
       await signInWithEmailAndPassword(auth, syntheticEmail, password);
-      router.push("/dm");
+      router.push("/general");
     } catch (err: any) {
       console.error("Erro detalhado:", err);
       let message = "Erro ao entrar. Verifique suas credenciais.";

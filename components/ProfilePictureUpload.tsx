@@ -7,7 +7,7 @@ import { auth, db } from "@/lib/firebase";
 import { ref as dRef, update } from "firebase/database";
 import { updateProfile } from "firebase/auth";
 
-const IMGBB_KEY = process.env.NEXT_PUBLIC_IMGBB_KEY || "";
+const IMGBB_KEY = process.env.IMGBB_KEY || "";
 
 interface ProfilePictureUploadProps {
   currentPhotoURL: string | null;

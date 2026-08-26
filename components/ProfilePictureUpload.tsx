@@ -3,16 +3,20 @@
 
 import { useState, useRef } from "react";
 import { FaCamera, FaUser, FaTimes } from "react-icons/fa";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage, auth } from "@/lib/firebase";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { storage, auth, db } from "@/lib/firebase";
 import { updateProfile } from "firebase/auth";
+import { update } from "firebase/database";
 
 interface ProfilePictureUploadProps {
   currentPhotoURL: string | null;
   onUpdate: (url: string | null) => void;
 }
 
-export default function ProfilePictureUpload({ currentPhotoURL, onUpdate }: ProfilePictureUploadProps) {
+export default function ProfilePictureUpload({
+  currentPhotoURL,
+  onUpdate,
+}: ProfilePictureUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -21,14 +25,12 @@ export default function ProfilePictureUpload({ currentPhotoURL, onUpdate }: Prof
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validações
     if (!file.type.startsWith("image/")) {
       setError("Por favor, selecione uma imagem.");
       return;
     }
-
     if (file.size > 2 * 1024 * 1024) {
-      setError("A imagem deve ter no máximo 2MB.");
+      setError("A imagem deve ter no m\u00e1ximo 2MB.");
       return;
     }
 
@@ -37,20 +39,30 @@ export default function ProfilePictureUpload({ currentPhotoURL, onUpdate }: Prof
 
     try {
       const user = auth.currentUser;
-      if (!user) throw new Error("Usuário não autenticado");
+      if (!user) throw new Error("N\u00e3o autenticado");
+
+      if (currentPhotoURL) {
+        try {
+          await deleteObject(ref(storage, `profile-pictures/${user.uid}`));
+        } catch {}
+      }
 
       const storageRef = ref(storage, `profile-pictures/${user.uid}`);
       await uploadBytes(storageRef, file);
       const downloadURL = await getDownloadURL(storageRef);
 
       await updateProfile(user, { photoURL: downloadURL });
-      onUpdate(downloadURL);
 
-      // Limpa o input
+      await update(ref(db, `users/${user.uid}`), {
+        photoURL: downloadURL,
+        updatedAt: Date.now(),
+      });
+
+      onUpdate(downloadURL);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err) {
       console.error("Erro ao fazer upload:", err);
-      setError("Erro ao fazer upload da imagem. Tente novamente.");
+      setError("Erro ao fazer upload. Tente novamente.");
     } finally {
       setUploading(false);
     }
@@ -58,13 +70,22 @@ export default function ProfilePictureUpload({ currentPhotoURL, onUpdate }: Prof
 
   const handleRemovePhoto = async () => {
     if (!confirm("Tem certeza que deseja remover sua foto de perfil?")) return;
-
     setUploading(true);
     try {
       const user = auth.currentUser;
-      if (!user) throw new Error("Usuário não autenticado");
+      if (!user) throw new Error("N\u00e3o autenticado");
+
+      try {
+        await deleteObject(ref(storage, `profile-pictures/${user.uid}`));
+      } catch {}
 
       await updateProfile(user, { photoURL: null });
+
+      await update(ref(db, `users/${user.uid}`), {
+        photoURL: null,
+        updatedAt: Date.now(),
+      });
+
       onUpdate(null);
     } catch (err) {
       console.error("Erro ao remover foto:", err);
@@ -88,7 +109,6 @@ export default function ProfilePictureUpload({ currentPhotoURL, onUpdate }: Prof
             <FaUser />
           )}
         </div>
-
         <button
           type="button"
           className="absolute -bottom-1 -right-1 flex items-center justify-center w-9 h-9 bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] border-2 border-[#0a0618] rounded-full text-white cursor-pointer transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -99,7 +119,6 @@ export default function ProfilePictureUpload({ currentPhotoURL, onUpdate }: Prof
           <FaCamera className="text-sm" />
         </button>
       </div>
-
       <input
         ref={fileInputRef}
         type="file"
@@ -108,7 +127,6 @@ export default function ProfilePictureUpload({ currentPhotoURL, onUpdate }: Prof
         onChange={handleFileSelect}
         disabled={uploading}
       />
-
       {currentPhotoURL && (
         <button
           type="button"
@@ -119,14 +137,12 @@ export default function ProfilePictureUpload({ currentPhotoURL, onUpdate }: Prof
           <FaTimes className="text-[10px]" /> Remover foto
         </button>
       )}
-
       {uploading && (
         <span className="text-xs text-[#b8a8d9] flex items-center gap-2">
           <span className="w-3 h-3 border-2 border-[#a78bfa] border-t-transparent rounded-full animate-spin" />
           Enviando...
         </span>
       )}
-
       {error && (
         <span className="text-xs text-[#f87171] text-center">{error}</span>
       )}

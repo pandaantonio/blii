@@ -1,188 +1,209 @@
-// app/settings/SettingsContent.tsx
+// components/ProfilePictureUpload.tsx
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useRef, useCallback } from "react";
+import { FaCamera, FaUser, FaTimes } from "react-icons/fa";
 import { auth, db } from "@/lib/firebase";
-import { ref, update, onValue } from "firebase/database";
-import {
-  onAuthStateChanged,
-  User as FirebaseUser,
-  updateProfile,
-} from "firebase/auth";
-import {
-  FaUser,
-  FaSave,
-  FaCheck,
-  FaArrowLeft,
-} from "react-icons/fa";
-import ProfilePictureUpload from "@/components/ProfilePictureUpload";
+import { ref as dRef, update } from "firebase/database";
+import { compressImage, base64SizeBytes } from "@/lib/imageUtils";
 
-interface AppUser {
-  uid: string;
-  displayName: string | null;
-  email: string | null;
-  photoURL: string | null;
-  providerData?: any[];
-  metadata?: {
-    creationTime?: string;
-    lastSignInTime?: string;
-  };
+interface ProfilePictureUploadProps {
+  currentPhotoURL: string | null;
+  onUpdate: (url: string | null) => void;
 }
 
-export default function SettingsContent() {
-  const router = useRouter();
+export default function ProfilePictureUpload({
+  currentPhotoURL,
+  onUpdate,
+}: ProfilePictureUploadProps) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounterRef = useRef(0);
+  const [isDragging, setIsDragging] = useState(false);
 
-  const [user, setUser] = useState<AppUser | null>(null);
-  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const processFile = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setError("Por favor, selecione uma imagem.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError("A imagem deve ter no m\u00e1ximo 10MB.");
+      return;
+    }
 
-  const [displayName, setDisplayName] = useState("");
-  const [photoURL, setPhotoURL] = useState<string | null>(null);
-  const [savingProfile, setSavingProfile] = useState(false);
-  const [profileSaved, setProfileSaved] = useState(false);
+    setUploading(true);
+    setError(null);
 
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      if (!u) {
-        router.replace("/");
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("N\u00e3o autenticado");
+
+      const dataUrl = await compressImage(file, 512, 0.7);
+
+      if (base64SizeBytes(dataUrl) > 1024 * 1024) {
+        setError("Imagem muito grande mesmo ap\u00f3s compress\u00e3o.");
+        setUploading(false);
         return;
       }
-      setFirebaseUser(u);
-      setUser({
-        uid: u.uid,
-        displayName: u.displayName || null,
-        email: u.email || null,
-        photoURL: u.photoURL || null,
-        providerData: u.providerData,
-        metadata: u.metadata,
-      });
-      setDisplayName(u.displayName || "");
-      setPhotoURL(u.photoURL || null);
-      setLoading(false);
-    });
-    return () => unsub();
-  }, [router]);
 
-  // Sincroniza foto do banco (base64) — sobrescreve o valor do Auth
-  // Sincroniza foto do banco (base64) — sobrescreve o valor do Auth
-  useEffect(() => {
-    if (!user?.uid) return;
-    const unsub = onValue(ref(db, `users/${user.uid}/photoURL`), (snap) => {
-      const dbPhoto = snap.val() || null;
-      setPhotoURL(dbPhoto);
-      setUser((prev) => prev ? { ...prev, photoURL: dbPhoto } : prev);
-    });
-    return () => unsub();
-  }, [user?.uid]);
-
-  const handleSaveProfile = async () => {
-    if (!firebaseUser || !displayName.trim()) return;
-    setSavingProfile(true);
-    setProfileSaved(false);
-    try {
-      await updateProfile(firebaseUser, {
-        displayName: displayName.trim(),
-      });
-      await update(ref(db, `users/${firebaseUser.uid}`), {
-        displayName: displayName.trim(),
+      await update(dRef(db, `users/${user.uid}`), {
+        photoURL: dataUrl,
         updatedAt: Date.now(),
       });
-      setProfileSaved(true);
-      setTimeout(() => setProfileSaved(false), 2500);
+
+      onUpdate(dataUrl);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err) {
-      console.error("Erro ao salvar perfil:", err);
+      console.error("Erro ao fazer upload:", err);
+      setError("Erro ao processar a imagem. Tente novamente.");
     } finally {
-      setSavingProfile(false);
+      setUploading(false);
+    }
+  }, [onUpdate]);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+  };
+
+  const handleRemovePhoto = async () => {
+    if (!confirm("Tem certeza que deseja remover sua foto de perfil?")) return;
+    setUploading(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("N\u00e3o autenticado");
+
+      await update(dRef(db, `users/${user.uid}`), {
+        photoURL: null,
+        updatedAt: Date.now(),
+      });
+
+      onUpdate(null);
+    } catch (err) {
+      console.error("Erro ao remover foto:", err);
+      setError("Erro ao remover foto. Tente novamente.");
+    } finally {
+      setUploading(false);
     }
   };
 
-  const handlePhotoUpdate = (url: string | null) => {
-    setPhotoURL(url);
-    if (user) setUser({ ...user, photoURL: url });
-  };
+  // ─── Drag & Drop ───────────────────────────────────────────
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer.types.includes("Files")) {
+      setIsDragging(true);
+    }
+  }, []);
 
-  if (loading || !user) {
-    return (
-      <div className="min-h-screen min-h-dvh flex flex-col items-center justify-center gap-4 text-[#b8a8d9] text-sm bg-[radial-gradient(ellipse_at_20%_20%,#1a0a2e_0%,#0a0618_50%,#2d1045_100%)]">
-        <div className="w-10 h-10 border-3 border-white/6 border-t-[#a78bfa] rounded-full animate-spin" />
-        <p>Carregando configura\u00e7\u00f5es...</p>
-      </div>
-    );
-  }
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDragging(false);
+
+    if (uploading) return;
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    if (file.type.startsWith("image/")) {
+      processFile(file);
+    } else {
+      setError("Apenas imagens s\u00e3o aceitas.");
+    }
+  }, [uploading, processFile]);
 
   return (
-    <div className="min-h-screen min-h-dvh bg-[radial-gradient(ellipse_at_20%_20%,#1a0a2e_0%,#0a0618_50%,#2d1045_100%)] overflow-y-auto">
-      <header className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 md:px-8 py-4 sm:py-5 md:py-6 border-b border-[rgba(255,255,255,0.04)] bg-[rgba(255,255,255,0.02)] sticky top-0 z-10 backdrop-blur-xl">
+    <div
+      className="flex flex-col items-center gap-3"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      <div className="relative">
+        {/* Anel de drag & drop */}
+        {isDragging && (
+          <div className="absolute -inset-2 rounded-full border-2 border-dashed border-[#a78bfa] animate-pulse" />
+        )}
+
+        <div
+          className={`w-28 h-28 rounded-full bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] flex items-center justify-center text-white text-3xl font-bold overflow-hidden border-2 border-[rgba(255,255,255,0.08)] shadow-[0_4px_20px_rgba(167,139,250,0.2)] transition-all duration-200 ${
+            isDragging ? "scale-110 shadow-[0_0_30px_rgba(167,139,250,0.4)]" : ""
+          }`}
+        >
+          {currentPhotoURL ? (
+            <img src={currentPhotoURL} alt="Foto de perfil" className="w-full h-full object-cover" />
+          ) : (
+            <FaUser />
+          )}
+        </div>
+
         <button
           type="button"
-          className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 bg-transparent border border-[rgba(255,255,255,0.06)] rounded-xl text-[#7a6a9a] cursor-pointer transition-all duration-200 hover:bg-[rgba(255,255,255,0.04)] hover:text-[#f0ebff] hover:border-[rgba(255,255,255,0.12)] flex-shrink-0"
-          onClick={() => router.back()}
-          title="Voltar"
+          className="absolute -bottom-1 -right-1 flex items-center justify-center w-9 h-9 bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] border-2 border-[#0a0618] rounded-full text-white cursor-pointer transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          title="Alterar foto"
         >
-          <FaArrowLeft className="text-sm sm:text-base" />
+          <FaCamera className="text-sm" />
         </button>
-        <h1 className="font-['Sora','Inter',system-ui,sans-serif] text-lg sm:text-xl font-bold text-[#f0ebff] m-0">
-          Configura\u00e7\u00f5es
-        </h1>
-      </header>
+      </div>
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-8">
-        <section className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.04)] rounded-2xl p-4 sm:p-5 md:p-6">
-          <div className="flex items-start gap-3 sm:gap-4 mb-4 sm:mb-5 md:mb-6">
-            <div className="w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 flex items-center justify-center rounded-xl bg-[rgba(255,138,91,0.1)] border border-[rgba(255,138,91,0.1)] text-[#ff8a5b] text-base sm:text-lg flex-shrink-0">
-              <FaUser />
-            </div>
-            <div>
-              <h2 className="font-['Sora','Inter',system-ui,sans-serif] text-base sm:text-lg font-bold text-[#f0ebff] m-0">Perfil</h2>
-              <p className="text-xs sm:text-sm text-[#b8a8d9] m-0">Gerencie seu nome e foto de perfil</p>
-            </div>
-          </div>
+      {/* Dica de drag & drop */}
+      <span className="text-[10px] text-[#7a6a9a]/70 text-center leading-tight -mt-1">
+        Arraste uma imagem aqui<br />ou clique no <FaCamera className="inline text-[8px] mx-0.5" />
+      </span>
 
-          <div className="flex flex-col sm:flex-row gap-6 sm:gap-8">
-            <div className="flex-shrink-0 flex justify-center sm:block">
-              <ProfilePictureUpload
-                currentPhotoURL={photoURL}
-                onUpdate={handlePhotoUpdate}
-              />
-            </div>
-            <div className="flex-1 min-w-0">
-              <label className="block text-xs sm:text-sm font-semibold text-[#b8a8d9] tracking-wide mb-1.5" htmlFor="displayName">
-                Nome de exibi\u00e7\u00e3o
-              </label>
-              <input
-                id="displayName"
-                type="text"
-                className="w-full h-10 sm:h-11 px-3 sm:px-3.5 bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] rounded-xl text-[#f0ebff] text-sm font-inherit outline-none transition-all duration-300 placeholder:text-[#7a6a9a] focus:border-[#a78bfa] focus:bg-[rgba(255,255,255,0.06)]"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="Seu nome"
-                maxLength={32}
-              />
-              <span className="text-[10px] sm:text-xs text-[#7a6a9a] mt-1 block text-right">
-                {displayName.length}/32
-              </span>
-            </div>
-          </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileSelect}
+        disabled={uploading}
+      />
 
-          <div className="mt-5 sm:mt-6">
-            <button
-              type="button"
-              className="inline-flex items-center justify-center gap-2 h-10 sm:h-11 px-4 sm:px-6 rounded-xl text-xs sm:text-sm font-semibold font-inherit cursor-pointer transition-all duration-300 bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] border-none text-white shadow-[0_4px_16px_rgba(167,139,250,0.25)] hover:-translate-y-0.5 hover:shadow-[0_8px_32px_rgba(167,139,250,0.35)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none w-full sm:w-auto"
-              onClick={handleSaveProfile}
-              disabled={savingProfile || !displayName.trim()}
-            >
-              {profileSaved ? (
-                <><FaCheck className="text-xs sm:text-sm" /> Salvo</>
-              ) : savingProfile ? (
-                <><span className="w-3.5 h-3.5 sm:w-4 sm:h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Salvando\u2026</>
-              ) : (
-                <><FaSave className="text-xs sm:text-sm" /> Salvar perfil</>
-              )}
-            </button>
-          </div>
-        </section>
-      </main>
+      {currentPhotoURL && (
+        <button
+          type="button"
+          className="text-xs text-[#7a6a9a] hover:text-[#f87171] transition-colors duration-200 flex items-center gap-1"
+          onClick={handleRemovePhoto}
+          disabled={uploading}
+        >
+          <FaTimes className="text-[10px]" /> Remover foto
+        </button>
+      )}
+
+      {uploading && (
+        <span className="text-xs text-[#b8a8d9] flex items-center gap-2">
+          <span className="w-3 h-3 border-2 border-[#a78bfa] border-t-transparent rounded-full animate-spin" />
+          Processando...
+        </span>
+      )}
+
+      {error && (
+        <span className="text-xs text-[#f87171] text-center">{error}</span>
+      )}
     </div>
   );
 }

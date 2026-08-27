@@ -1,3 +1,4 @@
+// lib/firebase.ts
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import {
   getAuth,
@@ -22,6 +23,7 @@ import {
   equalTo,
   push,
   child,
+  onDisconnect,  // ← adicionado
 } from "firebase/database";
 import {
   getStorage,
@@ -67,6 +69,7 @@ export {
   equalTo,
   push,
   child,
+  onDisconnect,  // ← adicionado
   // Auth
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,

@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { db, ref, get, update, set, remove, push } from "@/lib/firebase";
+import { db, ref, get, update, set, remove, push, onDisconnect } from "@/lib/firebase";
 import {
   query,
   orderByChild,
@@ -56,6 +56,9 @@ const buildPreviewText = (text: string): string => {
   return text;
 };
 
+// Considera "digitando" se o timestamp for dentro dos últimos 3.5 segundos
+const TYPING_WINDOW_MS = 3500;
+
 export default function DMConversation({
   user,
   peer,
@@ -70,10 +73,17 @@ export default function DMConversation({
   const [showEmoji, setShowEmoji] = useState(false);
   const [showGif, setShowGif] = useState(false);
   const [userPhotos, setUserPhotos] = useState<Record<string, string | null>>({});
+  const [peerTyping, setPeerTyping] = useState(false);
+
+  // Drag & drop
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounterRef = useRef(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const initialLoadDone = useRef(false);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const peerTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Fotos atualizadas em tempo real
   useEffect(() => {
@@ -118,6 +128,7 @@ export default function DMConversation({
     return () => { cancelled = true; };
   }, [user, peer, username, displayName, photoURL]);
 
+  // Escutar mensagens
   useEffect(() => {
     if (!dmId) { setMessages([]); return; }
     initialLoadDone.current = false;
@@ -147,6 +158,45 @@ export default function DMConversation({
     });
     return () => { u1(); u2(); u3(); };
   }, [dmId]);
+
+  // Escutar digitando do peer
+  useEffect(() => {
+    if (!dmId || !peer.userId) return;
+    const typingRef = ref(db, `dms/${dmId}/typing/${peer.userId}`);
+    const unsub = onValue(typingRef, (snap) => {
+      const ts = snap.val() as number | null;
+      if (peerTypingTimeoutRef.current) {
+        clearTimeout(peerTypingTimeoutRef.current);
+        peerTypingTimeoutRef.current = null;
+      }
+      if (ts && Date.now() - ts < TYPING_WINDOW_MS) {
+        setPeerTyping(true);
+        peerTypingTimeoutRef.current = setTimeout(() => {
+          setPeerTyping(false);
+          peerTypingTimeoutRef.current = null;
+        }, TYPING_WINDOW_MS);
+      } else {
+        setPeerTyping(false);
+      }
+    });
+    return () => {
+      unsub();
+      if (peerTypingTimeoutRef.current) {
+        clearTimeout(peerTypingTimeoutRef.current);
+        peerTypingTimeoutRef.current = null;
+      }
+    };
+  }, [dmId, peer.userId]);
+
+  // Limpar meu "digitando" ao desmontar
+  useEffect(() => {
+    if (!dmId || !user.uid) return;
+    const myTypingRef = ref(db, `dms/${dmId}/typing/${user.uid}`);
+    onDisconnect(myTypingRef).remove();
+    return () => {
+      remove(myTypingRef).catch(() => {});
+    };
+  }, [dmId, user.uid]);
 
   useEffect(() => {
     if (messages.length === 0) return;
@@ -191,6 +241,75 @@ export default function DMConversation({
     return () => document.removeEventListener("paste", handler);
   }, [dmId, sending]);
 
+  // ─── Drag & Drop ───────────────────────────────────────────────
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer.types.includes("Files")) {
+      setIsDragging(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDragging(false);
+
+    if (!dmId || sending) return;
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.type.startsWith("image/")) {
+        await handleSendFile(file.name, file);
+        break; // envia só a primeira imagem
+      }
+    }
+  }, [dmId, sending]);
+
+  // ─── Typing indicator ──────────────────────────────────────────
+  const handleTyping = useCallback(() => {
+    if (!dmId || !user.uid) return;
+    const myTypingRef = ref(db, `dms/${dmId}/typing/${user.uid}`);
+    set(myTypingRef, Date.now()).catch(() => {});
+
+    // Limpa após parar de digitar
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      remove(myTypingRef).catch(() => {});
+      typingTimeoutRef.current = null;
+    }, TYPING_WINDOW_MS);
+  }, [dmId, user.uid]);
+
+  const clearMyTyping = useCallback(() => {
+    if (!dmId || !user.uid) return;
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+    remove(ref(db, `dms/${dmId}/typing/${user.uid}`)).catch(() => {});
+  }, [dmId, user.uid]);
+
+  // ─── Send helpers ──────────────────────────────────────────────
   const updateDmMeta = useCallback(async (id: string, text: string, time: number) => {
     try { await update(ref(db, `dms/${id}`), { lastMessage: buildPreviewText(text), lastMessageTime: time }); } catch {}
   }, []);
@@ -198,6 +317,7 @@ export default function DMConversation({
   const handleSendText = useCallback(async (text: string) => {
     if (!dmId || sending) return;
     setSending(true);
+    clearMyTyping();
     try {
       const r = push(ref(db, `dms/${dmId}/messages`));
       const now = Date.now();
@@ -205,12 +325,13 @@ export default function DMConversation({
       await updateDmMeta(dmId, text, now);
     } catch (e) { console.error("Erro:", e); }
     finally { setSending(false); }
-  }, [dmId, sending, user.uid, username, displayName, photoURL, updateDmMeta]);
+  }, [dmId, sending, user.uid, username, displayName, photoURL, updateDmMeta, clearMyTyping]);
 
   const handleSendGif = useCallback(async (gif: GifData) => {
     if (!dmId || sending) return;
     setSending(true);
     setShowGif(false);
+    clearMyTyping();
     try {
       const r = push(ref(db, `dms/${dmId}/messages`));
       const now = Date.now();
@@ -218,11 +339,12 @@ export default function DMConversation({
       await updateDmMeta(dmId, "\u{1F3AC} GIF", now);
     } catch (e) { console.error("Erro:", e); }
     finally { setSending(false); }
-  }, [dmId, sending, user.uid, username, displayName, photoURL, updateDmMeta]);
+  }, [dmId, sending, user.uid, username, displayName, photoURL, updateDmMeta, clearMyTyping]);
 
   const handleSendFile = useCallback(async (text: string, file: File) => {
     if (!dmId || sending) return;
     setSending(true);
+    clearMyTyping();
     try {
       const dataUrl = await compressImage(file, 1280, 0.75);
       if (base64SizeBytes(dataUrl) > 2 * 1024 * 1024) { setSending(false); return; }
@@ -234,11 +356,11 @@ export default function DMConversation({
         authorId: user.uid, author: username, displayName,
         photoURL: photoURL || null, timestamp: now, edited: false,
       });
-      const preview = "\u{1F4F7} " + (file.name || "cola");
+      const preview = "\u{1F4F7} " + (file.name || "imagem");
       await updateDmMeta(dmId, text ? text + " " + preview : preview, now);
     } catch (e) { console.error("Erro:", e); }
     finally { setSending(false); }
-  }, [dmId, sending, user.uid, username, displayName, photoURL, updateDmMeta]);
+  }, [dmId, sending, user.uid, username, displayName, photoURL, updateDmMeta, clearMyTyping]);
 
   const handleSend = useCallback(async (text: string, file?: File) => {
     if (file) await handleSendFile(text, file);
@@ -266,18 +388,44 @@ export default function DMConversation({
   const peerPhoto = userPhotos[peer.userId] ?? peer.photoURL;
 
   return (
-    <div className="flex-1 flex flex-col h-full max-w-none m-0 relative">
+    <div
+      className="flex-1 flex flex-col h-full max-w-none m-0 relative"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {/* Overlay de drag & drop */}
+      {isDragging && (
+        <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center gap-3 bg-[#0a0618]/80 backdrop-blur-sm pointer-events-none">
+          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] flex items-center justify-center shadow-[0_0_40px_rgba(167,139,250,0.3)] animate-bounce">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
+            </svg>
+          </div>
+          <p className="text-[#f0ebff] font-['Sora','Inter',system-ui,sans-serif] text-base font-bold m-0">Solte a imagem aqui</p>
+          <span className="text-sm text-[#7a6a9a] m-0">Apenas imagens s\u00e3o aceitas</span>
+        </div>
+      )}
+
       <header className="flex items-center gap-3 px-4 py-3 border-b border-white/4 bg-white/2 flex-shrink-0">
         <button type="button" className="flex items-center justify-center w-8 h-8 bg-transparent border-none rounded-[8px] text-[#7a6a9a] cursor-pointer transition-all duration-200 hover:bg-[rgba(255,255,255,0.04)] hover:text-[#f0ebff] md:hidden" onClick={onBack} title="Voltar">
           <FaArrowLeft />
         </button>
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className="w-10 h-10 rounded-[10px] bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] flex items-center justify-center text-white font-['Sora','Inter',system-ui,sans-serif] text-base font-bold uppercase flex-shrink-0 shadow-[0_0_0_1px_rgba(255,255,255,0.04)] overflow-hidden">
+          <div className="relative w-10 h-10 rounded-[10px] bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] flex items-center justify-center text-white font-['Sora','Inter',system-ui,sans-serif] text-base font-bold uppercase flex-shrink-0 shadow-[0_0_0_1px_rgba(255,255,255,0.04)] overflow-hidden">
             {peerPhoto ? <img src={peerPhoto} alt={peer.displayName} className="w-full h-full object-cover" loading="lazy" /> : (peer.displayName?.charAt(0)?.toUpperCase() || <FaUser />)}
+            {peerTyping && (
+              <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-[#4ade80] rounded-full border-2 border-[#0a0618] animate-pulse" />
+            )}
           </div>
           <div className="flex flex-col gap-0.5 min-w-0">
             <span className="font-['Sora','Inter',system-ui,sans-serif] text-sm font-bold text-[#f0ebff] whitespace-nowrap overflow-hidden text-ellipsis">{peer.displayName}</span>
-            <span className="text-xs text-[#7a6a9a]">@{peer.username || "usu\u00e1rio"}</span>
+            <span className={`text-xs transition-colors duration-200 ${peerTyping ? "text-[#4ade80]" : "text-[#7a6a9a]"}`}>
+              {peerTyping ? "Digitando..." : `@${peer.username || "usu\u00e1rio"}`}
+            </span>
           </div>
         </div>
       </header>
@@ -288,6 +436,7 @@ export default function DMConversation({
             <div className="text-3xl mb-1 opacity-70">{"\u{1F4AC}"}</div>
             <p className="text-sm font-semibold text-[#f0ebff] m-0">Nenhuma mensagem ainda</p>
             <span className="text-sm text-[#7a6a9a]">Envie algo para {peer.displayName}</span>
+            <span className="text-xs text-[#7a6a9a]/60 mt-1">Voc\u00ea pode arrastar imagens aqui</span>
           </div>
         ) : (
           <MessageList
@@ -315,6 +464,7 @@ export default function DMConversation({
           disabled={!dmId}
           sending={sending}
           peerDisplayName={peer.displayName}
+          onTyping={handleTyping}
         />
       </div>
     </div>

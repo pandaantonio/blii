@@ -1,7 +1,7 @@
 // components/chat/ChatComposer.tsx
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { FaRegSmile, FaImage, FaPaperclip, FaTimes, FaFileImage } from "react-icons/fa";
 import { formatFileSize } from "./types";
 
@@ -14,6 +14,7 @@ interface ChatComposerProps {
   disabled: boolean;
   sending: boolean;
   peerDisplayName: string;
+  onTyping?: () => void;
 }
 
 export default function ChatComposer({
@@ -25,6 +26,7 @@ export default function ChatComposer({
   disabled,
   sending,
   peerDisplayName,
+  onTyping,
 }: ChatComposerProps) {
   const [text, setText] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -67,6 +69,14 @@ export default function ChatComposer({
     setFileError("");
     inputRef.current?.focus();
   };
+
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setText(e.target.value);
+      onTyping?.();
+    },
+    [onTyping]
+  );
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -148,7 +158,7 @@ export default function ChatComposer({
           className="flex-1 h-11 px-3.5 bg-white/4 border border-white/4 rounded-[10px] text-[#f0ebff] text-sm font-inherit outline-none transition-all duration-200 min-w-0 placeholder:text-[#7a6a9a] focus:border-[#ff8a5b] focus:bg-white/6 disabled:opacity-50 disabled:cursor-not-allowed"
           placeholder={`Mensagem para ${peerDisplayName}...`}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={handleChange}
           disabled={disabled || sending}
           onKeyDown={(e) => {
             if (e.key === "Escape") {

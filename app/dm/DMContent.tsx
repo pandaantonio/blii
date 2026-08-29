@@ -1,11 +1,10 @@
 // app/dm/DMContent.tsx
 "use client";
-
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { auth, db, ref, get, set, remove, onValue } from "@/lib/firebase";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
-import { FaComment, FaCircle, FaUserPlus, FaCheck, FaTimes, FaArrowLeft, FaUserClock, FaUsers } from "react-icons/fa";
+import { FaComment, FaCircle, FaUserPlus, FaCheck, FaTimes, FaArrowLeft, FaUserClock, FaUsers, FaEllipsisV, FaUserMinus } from "react-icons/fa";
 
 interface AppUser {
   uid: string;
@@ -54,7 +53,7 @@ const buildPreviewText = (text: string | null): string => {
 };
 
 const formatTime = (timestamp: number): string => {
-  if (!timestamp) return "";
+  if (!timestamp) return " ";
   const now = new Date();
   const date = new Date(timestamp);
   const sameDay = now.toDateString() === date.toDateString();
@@ -72,12 +71,10 @@ export default function DMContent() {
   const [displayName, setDisplayName] = useState("");
   const [photoURL, setPhotoURL] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-
   const [friendIds, setFriendIds] = useState<string[]>([]);
   const [allUsers, setAllUsers] = useState<Record<string, any>>({});
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [incomingRequests, setIncomingRequests] = useState<IncomingRequest[]>([]);
-
   const [showFriendModal, setShowFriendModal] = useState(false);
   const [friendUsername, setFriendUsername] = useState("");
   const [searchError, setSearchError] = useState("");
@@ -85,6 +82,10 @@ export default function DMContent() {
   const [searchResult, setSearchResult] = useState<any>(null);
   const [sendingRequest, setSendingRequest] = useState(false);
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [removingFriendId, setRemovingFriendId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   useEffect(() => {
     setMounted(true);
@@ -105,20 +106,22 @@ export default function DMContent() {
       };
       setUser(mappedUser);
       setPhotoURL(currentUser.photoURL || null);
+
       const userRef = ref(db, `users/${currentUser.uid}`);
       const unsubscribeUser = onValue(userRef, (snapshot) => {
         if (snapshot.exists()) {
           const data = snapshot.val();
-          setUsername(data.username || "Usu\u00e1rio");
-          setDisplayName(data.displayName || data.username || "Usu\u00e1rio");
+          setUsername(data.username || "Usuário");
+          setDisplayName(data.displayName || data.username || "Usuário");
           setPhotoURL(data.photoURL || currentUser.photoURL || null);
         } else {
-          setUsername("Usu\u00e1rio");
-          setDisplayName("Usu\u00e1rio");
+          setUsername("Usuário");
+          setDisplayName("Usuário");
           setPhotoURL(null);
         }
         setLoading(false);
       });
+
       return () => unsubscribeUser();
     });
     return () => unsubscribe();
@@ -160,13 +163,13 @@ export default function DMContent() {
       const list: Conversation[] = Object.entries(data)
         .filter(([, dm]: [string, any]) => dm.participants && dm.participants[user.uid])
         .map(([id, dm]: [string, any]) => {
-          const otherId = Object.keys(dm.participants).find((uid) => uid !== user.uid) || "";
+          const otherId = Object.keys(dm.participants).find((uid) => uid !== user.uid) || " ";
           const otherData = dm.participants[otherId] || {};
           return {
             dmId: id,
             userId: otherId,
-            username: otherData.username || "",
-            displayName: otherData.displayName || otherData.username || "Usu\u00e1rio",
+            username: otherData.username || " ",
+            displayName: otherData.displayName || otherData.username || "Usuário",
             photoURL: otherData.photoURL || null,
             lastMessage: dm.lastMessage || null,
             lastMessageTime: dm.lastMessageTime || 0,
@@ -193,8 +196,8 @@ export default function DMContent() {
       }
       const requests: IncomingRequest[] = Object.entries(data).map(([requesterId, req]: [string, any]) => ({
         requesterId,
-        username: req.username || "Usu\u00e1rio",
-        displayName: req.displayName || req.username || "Usu\u00e1rio",
+        username: req.username || "Usuário",
+        displayName: req.displayName || req.username || "Usuário",
         photoURL: req.photoURL || null,
         timestamp: req.timestamp || 0,
       }));
@@ -202,6 +205,27 @@ export default function DMContent() {
     });
     return () => unsub();
   }, [mounted, user]);
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      const menu = menuRef.current;
+      const button = openMenuId ? menuButtonRefs.current[openMenuId] : null;
+      if (menu && !menu.contains(target) && button && !button.contains(target)) {
+        setOpenMenuId(null);
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenMenuId(null);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEsc);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEsc);
+    };
+  }, [openMenuId]);
 
   const friends = useMemo<Friend[]>(() => {
     return friendIds
@@ -211,7 +235,7 @@ export default function DMContent() {
         return {
           id,
           username: u.username || "",
-          displayName: u.displayName || u.username || "Usu\u00e1rio",
+          displayName: u.displayName || u.username || "Usuário",
           photoURL: u.photoURL || null,
           status: u.status?.state || "offline",
           lastSeen: u.status?.lastSeen || 0,
@@ -230,15 +254,13 @@ export default function DMContent() {
       });
   }, [friends]);
 
-  const offlineFriends = useMemo(() => {
-    return friends
-      .filter((f) => f.status !== "online" && f.status !== "away")
-      .sort((a, b) => b.lastSeen - a.lastSeen);
-  }, [friends]);
-
   const conversationUserIds = useMemo(() => {
     return new Set(conversations.map((c) => c.userId));
   }, [conversations]);
+
+  const friendIdsSet = useMemo(() => {
+    return new Set(friendIds);
+  }, [friendIds]);
 
   const closeFriendModal = () => {
     setShowFriendModal(false);
@@ -255,7 +277,7 @@ export default function DMContent() {
       return;
     }
     if (usernameLower === username.toLowerCase()) {
-      setSearchError("Voc\u00ea n\u00e3o pode adicionar a si mesmo");
+      setSearchError("Você não pode adicionar a si mesmo");
       return;
     }
     setSearchLoading(true);
@@ -265,7 +287,7 @@ export default function DMContent() {
       const usernameRef = ref(db, `usernames/${usernameLower}`);
       const usernameSnap = await get(usernameRef);
       if (!usernameSnap.exists()) {
-        setSearchError("Usu\u00e1rio n\u00e3o encontrado");
+        setSearchError("Usuário não encontrado");
         setSearchLoading(false);
         return;
       }
@@ -281,19 +303,19 @@ export default function DMContent() {
       }
       const friendSnap = await get(ref(db, `friends/${user.uid}/friends/${targetId}`));
       if (friendSnap.exists()) {
-        setSearchError("Voc\u00ea j\u00e1 \u00e9 amigo deste usu\u00e1rio");
+        setSearchError("Você já é amigo deste usuário");
         setSearchLoading(false);
         return;
       }
       const outgoingSnap = await get(ref(db, `friends/${user.uid}/requests/outgoing/${targetId}`));
       if (outgoingSnap.exists()) {
-        setSearchError("Solicita\u00e7\u00e3o de amizade j\u00e1 enviada");
+        setSearchError("Solicitação de amizade já enviada");
         setSearchLoading(false);
         return;
       }
       const incomingSnap = await get(ref(db, `friends/${user.uid}/requests/incoming/${targetId}`));
       if (incomingSnap.exists()) {
-        setSearchError("Este usu\u00e1rio j\u00e1 te enviou uma solicita\u00e7\u00e3o");
+        setSearchError("Este usuário já te enviou uma solicitação");
         setSearchLoading(false);
         return;
       }
@@ -304,8 +326,8 @@ export default function DMContent() {
         photoURL: targetPhotoURL,
       });
     } catch (error) {
-      console.error("Erro ao buscar usu\u00e1rio:", error);
-      setSearchError("Erro ao buscar usu\u00e1rio");
+      console.error("Erro ao buscar usuário:", error);
+      setSearchError("Erro ao buscar usuário");
     } finally {
       setSearchLoading(false);
     }
@@ -317,8 +339,8 @@ export default function DMContent() {
     try {
       const requestData = {
         requesterId: user.uid,
-        username: username || "Usu\u00e1rio",
-        displayName: displayName || "Usu\u00e1rio",
+        username: username || "Usuário",
+        displayName: displayName || "Usuário",
         photoURL: photoURL || null,
         timestamp: Date.now(),
       };
@@ -332,8 +354,8 @@ export default function DMContent() {
       await set(ref(db, `friends/${searchResult.id}/requests/incoming/${user.uid}`), requestData);
       closeFriendModal();
     } catch (error) {
-      console.error("Erro ao enviar solicita\u00e7\u00e3o:", error);
-      setSearchError("Erro ao enviar solicita\u00e7\u00e3o");
+      console.error("Erro ao enviar solicitação:", error);
+      setSearchError("Erro ao enviar solicitação");
     } finally {
       setSendingRequest(false);
     }
@@ -352,14 +374,14 @@ export default function DMContent() {
       });
       await set(ref(db, `friends/${request.requesterId}/friends/${user.uid}`), {
         addedAt: now,
-        username: username || "Usu\u00e1rio",
-        displayName: displayName || "Usu\u00e1rio",
+        username: username || "Usuário",
+        displayName: displayName || "Usuário",
         photoURL: photoURL || null,
       });
       await remove(ref(db, `friends/${user.uid}/requests/incoming/${request.requesterId}`));
       await remove(ref(db, `friends/${request.requesterId}/requests/outgoing/${user.uid}`));
     } catch (error) {
-      console.error("Erro ao aceitar solicita\u00e7\u00e3o:", error);
+      console.error("Erro ao aceitar solicitação:", error);
     } finally {
       setProcessingRequestId(null);
     }
@@ -372,9 +394,29 @@ export default function DMContent() {
       await remove(ref(db, `friends/${user.uid}/requests/incoming/${request.requesterId}`));
       await remove(ref(db, `friends/${request.requesterId}/requests/outgoing/${user.uid}`));
     } catch (error) {
-      console.error("Erro ao recusar solicita\u00e7\u00e3o:", error);
+      console.error("Erro ao recusar solicitação:", error);
     } finally {
       setProcessingRequestId(null);
+    }
+  };
+
+  const handleRemoveFriend = async (friendId: string, friendName: string) => {
+    if (!user) return;
+    const confirmed = window.confirm(`Tem certeza que deseja desfazer a amizade com ${friendName}?`);
+    if (!confirmed) {
+      setOpenMenuId(null);
+      return;
+    }
+    setRemovingFriendId(friendId);
+    setOpenMenuId(null);
+    try {
+      await remove(ref(db, `friends/${user.uid}/friends/${friendId}`));
+      await remove(ref(db, `friends/${friendId}/friends/${user.uid}`));
+    } catch (error) {
+      console.error("Erro ao desfazer amizade:", error);
+      alert("Não foi possível desfazer a amizade. Tente novamente.");
+    } finally {
+      setRemovingFriendId(null);
     }
   };
 
@@ -392,10 +434,8 @@ export default function DMContent() {
       <div className="min-h-screen min-h-dvh relative overflow-hidden text-[#f0ebff] font-['Inter',system-ui,-apple-system,'Segoe_UI',Roboto,sans-serif] bg-[radial-gradient(ellipse_at_20%_20%,#1a0a2e_0%,#0a0618_50%,#2d1045_100%)] flex items-center justify-center p-2 sm:p-5">
         <div className="fixed w-[800px] h-[800px] -top-[300px] -right-[200px] bg-[radial-gradient(circle,rgba(167,139,250,0.06)_0%,transparent_70%)] pointer-events-none z-0 blur-[80px]" aria-hidden="true" />
         <div className="fixed w-[600px] h-[600px] -bottom-[200px] -left-[200px] bg-[radial-gradient(circle,rgba(255,138,91,0.04)_0%,transparent_70%)] pointer-events-none z-0 blur-[80px]" aria-hidden="true" />
-
         <div className="relative z-10 flex flex-col w-full max-w-[1400px] h-[calc(100vh-16px)] sm:h-[calc(100vh-40px)] max-h-[900px] bg-white/2 backdrop-blur-[40px] border border-white/4 rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_32px_80px_rgba(0,0,0,0.5)]">
           <div className="w-full h-full flex flex-col overflow-hidden px-4 sm:px-6 md:px-8 py-4 sm:py-6">
-
             <div className="flex items-center gap-2 sm:gap-4 justify-between mb-4 sm:mb-6 flex-shrink-0 flex-wrap">
               <div className="flex items-center gap-1 sm:gap-2 min-w-0">
                 <button type="button" className="flex items-center justify-center w-9 h-9 flex-shrink-0 bg-transparent border-none rounded-lg text-[#7a6a9a] cursor-pointer transition-all duration-200 hover:bg-[rgba(255,255,255,0.04)] hover:text-[#f0ebff]" onClick={() => router.push("/general")} title="Voltar">
@@ -411,9 +451,7 @@ export default function DMContent() {
                 <span className="hidden sm:inline">Adicionar amigo</span>
               </button>
             </div>
-
             <div className="flex-1 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[rgba(167,139,250,0.2)] [&::-webkit-scrollbar-thumb]:rounded-full">
-
               {incomingRequests.length > 0 && (
                 <div className="mb-7">
                   <div className="flex items-center justify-between mb-3">
@@ -448,7 +486,6 @@ export default function DMContent() {
                   </div>
                 </div>
               )}
-
               {onlineFriends.length > 0 && (
                 <div className="mb-7">
                   <div className="flex items-center justify-between mb-3">
@@ -460,50 +497,52 @@ export default function DMContent() {
                   </div>
                   <div className="flex flex-wrap gap-3">
                     {onlineFriends.map((f) => (
-                      <button key={f.id} type="button" className="flex items-center gap-3 p-3 bg-white/2 border border-white/4 rounded-[14px] cursor-pointer transition-all duration-200 text-left text-inherit font-inherit hover:bg-white/5 hover:border-[rgba(167,139,250,0.15)] hover:scale-105 min-w-[160px] max-w-[200px]" onClick={() => router.push(`/dm/${f.id}`)}>
-                        <div className="relative w-11 h-11 flex-shrink-0 rounded-[12px] bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] flex items-center justify-center text-white text-sm font-bold uppercase overflow-hidden">
-                          {f.photoURL ? <img src={f.photoURL} alt={f.displayName} className="w-full h-full object-cover" loading="lazy" /> : f.displayName.charAt(0).toUpperCase()}
-                          <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#0a0618]" style={{ background: f.status === "online" ? "#4fd8c4" : "#fbbf24", boxShadow: f.status === "online" ? "0 0 6px #4fd8c4" : "0 0 6px #fbbf24" }} />
-                        </div>
-                        <div className="flex-1 flex flex-col gap-0.5 min-w-0">
-                          <span className="text-sm font-semibold text-[#f0ebff] whitespace-nowrap overflow-hidden text-ellipsis">{f.displayName}</span>
-                          <span className="text-[0.75rem] text-[#7a6a9a]">@{f.username || "usuário"}</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {offlineFriends.length > 0 && (
-                <div className="mb-7">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-bold text-[#b8a8d9] uppercase tracking-wide m-0 flex items-center gap-2">
-                      <FaUsers className="text-[#7a6a9a] text-[0.6rem]" />
-                      Amigos offline
-                    </h3>
-                    <span className="text-xs font-semibold text-[#7a6a9a] bg-white/3 px-2.5 py-1 rounded-full">{offlineFriends.length}</span>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    {offlineFriends.map((f) => (
-                      <button key={f.id} type="button" className="flex items-center gap-3 p-3 bg-transparent border border-transparent rounded-[14px] cursor-pointer transition-all duration-200 text-left hover:bg-white/3 hover:border-white/4" onClick={() => router.push(`/dm/${f.id}`)}>
-                        <div className="relative w-11 h-11 flex-shrink-0 rounded-[12px] bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] flex items-center justify-center text-white text-sm font-bold uppercase overflow-hidden opacity-60">
-                          {f.photoURL ? <img src={f.photoURL} alt={f.displayName} className="w-full h-full object-cover" loading="lazy" /> : f.displayName.charAt(0).toUpperCase()}
-                          <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#0a0618] bg-[#5a5a6e]" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <span className="block text-sm font-semibold text-[#7a6a9a] truncate">{f.displayName}</span>
-                          <span className="block text-[0.75rem] text-[#5a5a6e]">@{f.username || "usuário"}</span>
-                        </div>
-                        {!conversationUserIds.has(f.id) && (
-                          <span className="text-[0.65rem] font-semibold text-[#7a6a9a] bg-white/3 px-2 py-0.5 rounded-full flex-shrink-0">Iniciar conversa</span>
+                      <div key={f.id} className="relative flex items-center gap-3 p-3 bg-white/2 border border-white/4 rounded-[14px] min-w-[160px] max-w-[220px] group">
+                        <button type="button" className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer transition-all duration-200 text-left text-inherit font-inherit hover:opacity-80" onClick={() => router.push(`/dm/${f.id}`)} disabled={removingFriendId === f.id}>
+                          <div className="relative w-11 h-11 flex-shrink-0 rounded-[12px] bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] flex items-center justify-center text-white text-sm font-bold uppercase overflow-hidden">
+                            {f.photoURL ? <img src={f.photoURL} alt={f.displayName} className="w-full h-full object-cover" loading="lazy" /> : f.displayName.charAt(0).toUpperCase()}
+                            <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#0a0618]" style={{ background: f.status === "online" ? "#4fd8c4" : "#fbbf24", boxShadow: f.status === "online" ? "0 0 6px #4fd8c4" : "0 0 6px #fbbf24" }} />
+                          </div>
+                          <div className="flex-1 flex flex-col gap-0.5 min-w-0">
+                            <span className="text-sm font-semibold text-[#f0ebff] whitespace-nowrap overflow-hidden text-ellipsis">{f.displayName}</span>
+                            <span className="text-[0.75rem] text-[#7a6a9a]">@{f.username || "usuário"}</span>
+                          </div>
+                        </button>
+                        <button
+                          ref={(el) => { menuButtonRefs.current[f.id] = el; }}
+                          type="button"
+                          className="flex items-center justify-center w-7 h-7 flex-shrink-0 bg-transparent border-none rounded-[8px] text-[#7a6a9a] cursor-pointer transition-all duration-150 hover:bg-white/6 hover:text-[#f0ebff] opacity-0 group-hover:opacity-100 focus:opacity-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuId(openMenuId === f.id ? null : f.id);
+                          }}
+                          title="Mais opções"
+                          aria-label="Mais opções"
+                          disabled={removingFriendId === f.id}
+                        >
+                          <FaEllipsisV className="text-[0.7rem]" />
+                        </button>
+                        {openMenuId === f.id && (
+                          <div
+                            ref={menuRef}
+                            className="absolute right-2 top-full mt-1.5 z-50 min-w-[180px] bg-[linear-gradient(165deg,rgba(20,10,40,0.98),rgba(30,15,50,0.98))] backdrop-blur-[20px] border border-white/8 rounded-[12px] shadow-[0_16px_40px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+                          >
+                            <button
+                              type="button"
+                              className="flex items-center gap-2.5 w-full px-3.5 py-2.5 bg-transparent border-none text-left text-[#f87171] text-sm font-semibold cursor-pointer transition-all duration-150 hover:bg-[rgba(248,113,113,0.1)] disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={() => handleRemoveFriend(f.id, f.displayName)}
+                              disabled={removingFriendId === f.id}
+                            >
+                              <FaUserMinus className="text-[0.8rem]" />
+                              {removingFriendId === f.id ? "Removendo..." : "Desfazer amizade"}
+                            </button>
+                          </div>
                         )}
-                      </button>
+                      </div>
                     ))}
                   </div>
                 </div>
               )}
-
               <div>
                 <h3 className="text-sm font-bold text-[#b8a8d9] uppercase tracking-wide m-0 mb-3">Conversas</h3>
                 {conversations.length === 0 ? (
@@ -517,28 +556,62 @@ export default function DMContent() {
                 ) : (
                   <div className="flex flex-col gap-1.5">
                     {conversations.map((c) => (
-                      <button key={c.dmId} type="button" className="flex items-center gap-3 p-3 bg-transparent border border-transparent rounded-[14px] cursor-pointer transition-all duration-200 text-left hover:bg-white/3 hover:border-white/4" onClick={() => router.push(`/dm/${c.userId}`)}>
-                        <div className="relative w-12 h-12 flex-shrink-0 rounded-[12px] bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] flex items-center justify-center text-white text-sm font-bold uppercase overflow-hidden">
-                          {c.photoURL ? <img src={c.photoURL} alt={c.displayName} className="w-full h-full object-cover" loading="lazy" /> : c.displayName.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-sm font-semibold text-[#f0ebff] truncate">{c.displayName}</span>
-                            {c.lastMessageTime > 0 && <span className="text-[0.7rem] text-[#7a6a9a] flex-shrink-0">{formatTime(c.lastMessageTime)}</span>}
+                      <div key={c.dmId} className="relative flex items-center gap-3 p-3 bg-transparent border border-transparent rounded-[14px] group hover:bg-white/3 hover:border-white/4">
+                        <button type="button" className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer transition-all duration-200 text-left hover:opacity-80" onClick={() => router.push(`/dm/${c.userId}`)} disabled={removingFriendId === c.userId}>
+                          <div className="relative w-12 h-12 flex-shrink-0 rounded-[12px] bg-gradient-to-br from-[#ff8a5b] to-[#a78bfa] flex items-center justify-center text-white text-sm font-bold uppercase overflow-hidden">
+                            {c.photoURL ? <img src={c.photoURL} alt={c.displayName} className="w-full h-full object-cover" loading="lazy" /> : c.displayName.charAt(0).toUpperCase()}
                           </div>
-                          <p className="text-[0.8rem] text-[#7a6a9a] m-0 truncate">{buildPreviewText(c.lastMessage)}</p>
-                        </div>
-                      </button>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-semibold text-[#f0ebff] truncate">{c.displayName}</span>
+                              {c.lastMessageTime > 0 && <span className="text-[0.7rem] text-[#7a6a9a] flex-shrink-0">{formatTime(c.lastMessageTime)}</span>}
+                            </div>
+                            <p className="text-[0.8rem] text-[#7a6a9a] m-0 truncate">{buildPreviewText(c.lastMessage)}</p>
+                          </div>
+                        </button>
+                        {friendIdsSet.has(c.userId) && (
+                          <>
+                            <button
+                              ref={(el) => { menuButtonRefs.current[`conv-${c.userId}`] = el; }}
+                              type="button"
+                              className="flex items-center justify-center w-7 h-7 flex-shrink-0 bg-transparent border-none rounded-[8px] text-[#7a6a9a] cursor-pointer transition-all duration-150 hover:bg-white/6 hover:text-[#f0ebff] opacity-0 group-hover:opacity-100 focus:opacity-100"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenMenuId(openMenuId === `conv-${c.userId}` ? null : `conv-${c.userId}`);
+                              }}
+                              title="Mais opções"
+                              aria-label="Mais opções"
+                              disabled={removingFriendId === c.userId}
+                            >
+                              <FaEllipsisV className="text-[0.7rem]" />
+                            </button>
+                            {openMenuId === `conv-${c.userId}` && (
+                              <div
+                                ref={menuRef}
+                                className="absolute right-2 top-full mt-1.5 z-50 min-w-[180px] bg-[linear-gradient(165deg,rgba(20,10,40,0.98),rgba(30,15,50,0.98))] backdrop-blur-[20px] border border-white/8 rounded-[12px] shadow-[0_16px_40px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+                              >
+                                <button
+                                  type="button"
+                                  className="flex items-center gap-2.5 w-full px-3.5 py-2.5 bg-transparent border-none text-left text-[#f87171] text-sm font-semibold cursor-pointer transition-all duration-150 hover:bg-[rgba(248,113,113,0.1)] disabled:opacity-50 disabled:cursor-not-allowed"
+                                  onClick={() => handleRemoveFriend(c.userId, c.displayName)}
+                                  disabled={removingFriendId === c.userId}
+                                >
+                                  <FaUserMinus className="text-[0.8rem]" />
+                                  {removingFriendId === c.userId ? "Removendo..." : "Desfazer amizade"}
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
                     ))}
                   </div>
                 )}
               </div>
-
             </div>
           </div>
         </div>
       </div>
-
       {showFriendModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-3xl flex items-center justify-center z-[2000] p-5" onClick={closeFriendModal}>
           <div className="relative w-full max-w-[440px] p-6 sm:p-10 sm:px-9 bg-[linear-gradient(165deg,rgba(20,10,40,0.98),rgba(30,15,50,0.98))] backdrop-blur-[20px] border border-white/6 rounded-3xl shadow-[0_32px_80px_rgba(0,0,0,0.6)] text-center" onClick={(e) => e.stopPropagation()}>
